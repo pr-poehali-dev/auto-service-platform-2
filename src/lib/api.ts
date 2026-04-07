@@ -64,10 +64,33 @@ export interface CartItem {
   price: number;
 }
 
+export interface VinInfo {
+  vin: string;
+  make?: string;
+  make_display?: string;
+  model?: string;
+  year?: string;
+  series?: string;
+  vehicle_type?: string;
+  cylinders?: string;
+  displacement?: string;
+  fuel_type?: string;
+  drive_type?: string;
+  transmission?: string;
+  body_class?: string;
+  manufacturer?: string;
+  plant_country?: string;
+  error_code?: string;
+  error_text?: string;
+  valid: boolean;
+  autodoc_url: string;
+}
+
 export const api = {
   cars: {
     list: () => request<{ cars: Car[] }>("cars"),
     add: (data: Omit<Car, "id" | "created_at">) => request<{ id: number; ok: boolean }>("cars", "POST", data),
+    decodeVin: (vin: string) => request<VinInfo>("cars", "GET", undefined, { action: "decode", vin }),
   },
   articles: {
     list: (q?: string) => request<{ articles: Article[] }>("articles", "GET", undefined, q ? { q } : undefined),

@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import Icon from "@/components/ui/icon";
-import { api, type Car, type Article, type Order, type CartItem } from "@/lib/api";
+import { api, type Car, type Article, type Order, type CartItem, type VinInfo } from "@/lib/api";
 
 type Section =
   | "home"
@@ -63,6 +63,9 @@ function StatusBadge({ status }: { status: string }) {
 function HomeSection({ onSearch }: { onSearch: (vin: string) => void }) {
   const [vin, setVin] = useState("");
   const [scanning, setScanning] = useState(false);
+  const [vinInfo, setVinInfo] = useState<VinInfo | null>(null);
+  const [vinLoading, setVinLoading] = useState(false);
+  const [vinError, setVinError] = useState("");
   const videoRef = useRef<HTMLVideoElement>(null);
   const { data: carsData } = useApi(() => api.cars.list());
   const { data: ordersData } = useApi(() => api.orders.list());
@@ -74,6 +77,22 @@ function HomeSection({ onSearch }: { onSearch: (vin: string) => void }) {
   const activeOrders = orders.filter((o) => o.status === "in_work" || o.status === "waiting");
   const lowStock = articles.filter((a) => a.stock <= 2);
   const totalRevenue = orders.filter((o) => o.status === "done").reduce((s, o) => s + o.amount, 0);
+
+  const handleVinSearch = async () => {
+    if (vin.length !== 17) { setVinError("VIN должен содержать 17 символов"); return; }
+    setVinError("");
+    setVinInfo(null);
+    setVinLoading(true);
+    try {
+      const result = await api.cars.decodeVin(vin);
+      setVinInfo(result);
+      onSearch(vin);
+    } catch {
+      setVinError("Не удалось получить данные. Проверьте VIN.");
+    } finally {
+      setVinLoading(false);
+    }
+  };
 
   const startScan = async () => {
     setScanning(true);
@@ -120,7 +139,8 @@ function HomeSection({ onSearch }: { onSearch: (vin: string) => void }) {
           <div className="relative flex-1">
             <input
               value={vin}
-              onChange={(e) => setVin(e.target.value.toUpperCase())}
+              onChange={(e) => { setVin(e.target.value.toUpperCase()); setVinInfo(null); setVinError(""); }}
+              onKeyDown={(e) => e.key === "Enter" && handleVinSearch()}
               placeholder="Введите VIN-код автомобиля..."
               className="vin-input w-full bg-card border border-border rounded-xl px-4 py-3.5 text-foreground font-body tracking-wider text-sm focus:outline-none focus:border-primary/60 focus:ring-2 focus:ring-primary/20 transition-all pr-14"
               maxLength={17}
@@ -130,10 +150,11 @@ function HomeSection({ onSearch }: { onSearch: (vin: string) => void }) {
             </span>
           </div>
           <button
-            onClick={() => onSearch(vin)}
-            className="bg-primary text-primary-foreground px-6 rounded-xl font-body font-semibold text-sm hover:brightness-110 transition-all active:scale-95"
+            onClick={handleVinSearch}
+            disabled={vinLoading}
+            className="bg-primary text-primary-foreground px-6 rounded-xl font-body font-semibold text-sm hover:brightness-110 transition-all active:scale-95 disabled:opacity-60 flex items-center gap-2 min-w-[80px] justify-center"
           >
-            Найти
+            {vinLoading ? <div className="w-4 h-4 border-2 border-primary-foreground border-t-transparent rounded-full animate-spin" /> : "Найти"}
           </button>
           <button
             onClick={scanning ? stopScan : startScan}
@@ -146,20 +167,65 @@ function HomeSection({ onSearch }: { onSearch: (vin: string) => void }) {
           </button>
         </div>
 
-        {vin.length >= 6 && !scanning && (
-          <div className="flex flex-wrap gap-2 animate-fade-in">
-            <span className="text-xs text-muted-foreground font-body self-center">Найти на:</span>
-            {[
-              { label: "Autodoc", url: `https://www.autodoc.ru/search/by-text/?search=${encodeURIComponent(vin)}`, color: "hover:text-blue-400 hover:border-blue-400/40" },
-              { label: "Stancebazztards", url: `https://stancebazztards.ru/index.php?route=product/search&search=${encodeURIComponent(vin)}`, color: "hover:text-orange-400 hover:border-orange-400/40" },
-              { label: "Technobearing", url: `https://technobearing.ru/search/?q=${encodeURIComponent(vin)}`, color: "hover:text-purple-400 hover:border-purple-400/40" },
-            ].map((s) => (
-              <a key={s.label} href={s.url} target="_blank" rel="noopener noreferrer"
-                className={`flex items-center gap-1.5 px-3 py-1.5 bg-card border border-border rounded-xl text-xs font-body text-muted-foreground transition-all ${s.color} hover:bg-secondary active:scale-95`}>
-                <Icon name="ExternalLink" size={11} />
-                {s.label}
-              </a>
-            ))}
+        {vinError && (
+          <div className="flex items-center gap-2 text-red-400 text-xs font-body animate-fade-in">
+            <Icon name="AlertCircle" size={13} />
+            {vinError}
+          </div>
+        )}
+
+        {vinInfo && (
+          <div className="bg-card border border-primary/25 rounded-xl overflow-hidden animate-fade-in">
+            <div className="flex items-center justify-between px-5 py-3 border-b border-border bg-primary/5">
+              <div className="flex items-center gap-2">
+                <Icon name="Car" size={16} className="text-primary" />
+                <span className="font-display text-sm font-semibold text-foreground uppercase tracking-wide">
+                  {vinInfo.make_display || vinInfo.make || "Неизвестный автомобиль"} {vinInfo.model}
+                </span>
+                {vinInfo.year && <span className="text-xs text-muted-foreground font-body">{vinInfo.year} г.</span>}
+              </div>
+              <div className="flex items-center gap-1.5">
+                {vinInfo.valid
+                  ? <span className="text-xs font-body text-green-400 flex items-center gap-1"><Icon name="CheckCircle" size={12} />VIN корректный</span>
+                  : <span className="text-xs font-body text-yellow-400 flex items-center gap-1"><Icon name="AlertTriangle" size={12} />Возможна ошибка</span>
+                }
+              </div>
+            </div>
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-0">
+              {[
+                { label: "VIN", value: vinInfo.vin },
+                { label: "Марка", value: vinInfo.make_display || vinInfo.make },
+                { label: "Модель", value: vinInfo.model },
+                { label: "Год", value: vinInfo.year },
+                { label: "Серия", value: vinInfo.series },
+                { label: "Кузов", value: vinInfo.body_class },
+                { label: "Двигатель", value: vinInfo.displacement ? `${vinInfo.displacement}L ${vinInfo.cylinders ? `(${vinInfo.cylinders} цил.)` : ""}` : undefined },
+                { label: "Топливо", value: vinInfo.fuel_type },
+                { label: "Привод", value: vinInfo.drive_type },
+                { label: "КПП", value: vinInfo.transmission },
+                { label: "Страна", value: vinInfo.plant_country },
+                { label: "Производитель", value: vinInfo.manufacturer },
+              ].filter((r) => r.value).map((row, i) => (
+                <div key={i} className="px-4 py-2.5 border-b border-r border-border/40 last:border-b-0">
+                  <div className="text-xs text-muted-foreground font-body">{row.label}</div>
+                  <div className="text-sm font-body font-medium text-foreground mt-0.5 truncate">{row.value}</div>
+                </div>
+              ))}
+            </div>
+            <div className="px-5 py-3 border-t border-border bg-secondary/20 flex flex-wrap gap-2">
+              <span className="text-xs text-muted-foreground font-body self-center">Найти запчасти:</span>
+              {[
+                { label: "Autodoc", url: vinInfo.autodoc_url, color: "hover:text-blue-400 hover:border-blue-400/40" },
+                { label: "Stancebazztards", url: `https://stancebazztards.ru/index.php?route=product/search&search=${encodeURIComponent(vin)}`, color: "hover:text-orange-400 hover:border-orange-400/40" },
+                { label: "Technobearing", url: `https://technobearing.ru/search/?q=${encodeURIComponent(vin)}`, color: "hover:text-purple-400 hover:border-purple-400/40" },
+              ].map((s) => (
+                <a key={s.label} href={s.url} target="_blank" rel="noopener noreferrer"
+                  className={`flex items-center gap-1.5 px-3 py-1.5 bg-card border border-border rounded-xl text-xs font-body text-muted-foreground transition-all ${s.color} hover:bg-secondary active:scale-95`}>
+                  <Icon name="ExternalLink" size={11} />
+                  {s.label}
+                </a>
+              ))}
+            </div>
           </div>
         )}
 

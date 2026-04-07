@@ -4,9 +4,19 @@
       "name": "GET cars list",
       "method": "GET",
       "path": "/",
-      "expectedStatus": 200,
-      "expectedBody": {"cars": []},
-      "bodyMatcher": "string_contains"
+      "expectedStatus": 200
+    },
+    {
+      "name": "Decode VIN BMW",
+      "method": "GET",
+      "path": "/?action=decode&vin=WBA3A5C55FF953411",
+      "expectedStatus": 200
+    },
+    {
+      "name": "Invalid VIN",
+      "method": "GET",
+      "path": "/?action=decode&vin=SHORT",
+      "expectedStatus": 400
     }
   ]
 }

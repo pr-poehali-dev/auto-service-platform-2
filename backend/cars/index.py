@@ -1,6 +1,8 @@
-"""Управление автомобилями в гараже: получение, добавление, удаление."""
+"""Управление автомобилями в гараже + декодирование VIN через NHTSA API."""
 import json
 import os
+import urllib.request
+import urllib.parse
 import psycopg2
 
 CORS = {
@@ -9,8 +11,55 @@ CORS = {
     "Access-Control-Allow-Headers": "Content-Type",
 }
 
+MAKE_RU = {
+    "BMW": "BMW", "MERCEDES-BENZ": "Mercedes-Benz", "AUDI": "Audi",
+    "VOLKSWAGEN": "Volkswagen", "TOYOTA": "Toyota", "HONDA": "Honda",
+    "FORD": "Ford", "CHEVROLET": "Chevrolet", "HYUNDAI": "Hyundai",
+    "KIA": "Kia", "NISSAN": "Nissan", "MAZDA": "Mazda",
+    "SUBARU": "Subaru", "VOLVO": "Volvo", "SKODA": "Skoda",
+    "PORSCHE": "Porsche", "LAND ROVER": "Land Rover", "LEXUS": "Lexus",
+    "INFINITI": "Infiniti", "MITSUBISHI": "Mitsubishi", "RENAULT": "Renault",
+    "PEUGEOT": "Peugeot", "CITROEN": "Citroen", "FIAT": "Fiat",
+    "LADA": "Lada", "GAZ": "ГАЗ", "UAZ": "УАЗ",
+}
+
+NHTSA_FIELDS = {
+    "Make": "make", "Model": "model", "Model Year": "year",
+    "Series": "series", "Vehicle Type": "vehicle_type",
+    "Engine Number of Cylinders": "cylinders",
+    "Displacement (L)": "displacement",
+    "Fuel Type - Primary": "fuel_type",
+    "Drive Type": "drive_type",
+    "Transmission Style": "transmission",
+    "Body Class": "body_class",
+    "Manufacturer Name": "manufacturer",
+    "Plant Country": "plant_country",
+    "Error Code": "error_code",
+    "Error Text": "error_text",
+}
+
+
+def decode_vin(vin: str) -> dict:
+    url = f"https://vpic.nhtsa.dot.gov/api/vehicles/decodevin/{urllib.parse.quote(vin)}?format=json"
+    req = urllib.request.Request(url, headers={"User-Agent": "AutoPro/1.0"})
+    with urllib.request.urlopen(req, timeout=10) as resp:
+        raw = json.loads(resp.read().decode("utf-8"))
+    result = {"vin": vin}
+    for item in raw.get("Results", []):
+        var = item.get("Variable", "")
+        val = item.get("Value")
+        if var in NHTSA_FIELDS and val and val != "Not Applicable":
+            result[NHTSA_FIELDS[var]] = val
+    if "make" in result:
+        result["make_display"] = MAKE_RU.get(result["make"].upper(), result["make"])
+    result["valid"] = result.get("error_code", "0") == "0"
+    result["autodoc_url"] = f"https://www.autodoc.ru/search/by-vin/?vin={vin}"
+    return result
+
+
 def get_conn():
     return psycopg2.connect(os.environ["DATABASE_URL"])
+
 
 def handler(event: dict, context) -> dict:
     if event.get("httpMethod") == "OPTIONS":
@@ -18,6 +67,16 @@ def handler(event: dict, context) -> dict:
 
     method = event.get("httpMethod", "GET")
     params = event.get("queryStringParameters") or {}
+
+    # VIN декодирование: GET ?action=decode&vin=...
+    if method == "GET" and params.get("action") == "decode":
+        vin = params.get("vin", "").strip().upper()
+        if len(vin) != 17:
+            return {"statusCode": 400, "headers": CORS,
+                    "body": json.dumps({"error": "VIN должен содержать 17 символов"})}
+        result = decode_vin(vin)
+        return {"statusCode": 200, "headers": CORS,
+                "body": json.dumps(result, ensure_ascii=False)}
 
     conn = get_conn()
     cur = conn.cursor()
