@@ -40,6 +40,7 @@ export interface Article {
   status: "in_stock" | "out_of_stock" | "low_stock";
   notes?: string;
   shop_url?: string;
+  car_brands?: string;
 }
 
 export interface Order {
@@ -94,7 +95,12 @@ export const api = {
     decodeVin: (vin: string) => request<VinInfo>("cars", "GET", undefined, { action: "decode", vin }),
   },
   articles: {
-    list: (q?: string) => request<{ articles: Article[] }>("articles", "GET", undefined, q ? { q } : undefined),
+    list: (q?: string, brand?: string) => {
+      const params: Record<string, string> = {};
+      if (q) params.q = q;
+      if (brand && brand !== "all") params.brand = brand;
+      return request<{ articles: Article[] }>("articles", "GET", undefined, Object.keys(params).length ? params : undefined);
+    },
     add: (data: Omit<Article, "id" | "status">) => request<{ id: number; ok: boolean }>("articles", "POST", data),
     update: (data: Partial<Article> & { id: number }) => request<{ ok: boolean }>("articles", "PUT", data),
   },

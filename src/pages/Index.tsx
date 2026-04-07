@@ -509,25 +509,40 @@ function ArticlesSection() {
   const [search, setSearch] = useState("");
   const [activeCategory, setActiveCategory] = useState("all");
   const [activeBrand, setActiveBrand] = useState("all");
-  const { data, loading, reload } = useApi(() => api.articles.list(search), [search]);
+
+  // Реальный фильтр по марке через API
+  const { data, loading, reload } = useApi(
+    () => api.articles.list(search || undefined, activeBrand !== "all" ? activeBrand : undefined),
+    [search, activeBrand]
+  );
   const allArticles: Article[] = data?.articles ?? [];
 
-  useEffect(() => { reload(); }, [search]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { reload(); }, [search, activeBrand]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState({ article: "", name: "", brand: "", price: 0, stock: 0 });
+  const [form, setForm] = useState({ article: "", name: "", brand: "", price: 0, stock: 0, car_brands: "universal", shop_url: "" });
+  const [formBrands, setFormBrands] = useState<Set<string>>(new Set(["universal"]));
   const [saving, setSaving] = useState(false);
   const [addedIds, setAddedIds] = useState<Set<number>>(new Set());
   const [compareIds, setCompareIds] = useState<Set<number>>(new Set());
   const [showCompare, setShowCompare] = useState(false);
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [editBrands, setEditBrands] = useState<Set<string>>(new Set());
 
   const handleAdd = async () => {
     if (!form.article || !form.name) return;
     setSaving(true);
-    await api.articles.add(form);
+    await api.articles.add({ ...form, car_brands: Array.from(formBrands).join(",") || "universal" });
     setSaving(false);
     setShowForm(false);
-    setForm({ article: "", name: "", brand: "", price: 0, stock: 0 });
+    setForm({ article: "", name: "", brand: "", price: 0, stock: 0, car_brands: "universal", shop_url: "" });
+    setFormBrands(new Set(["universal"]));
+    reload();
+  };
+
+  const handleSaveBrands = async (a: Article) => {
+    await api.articles.update({ id: a.id, car_brands: Array.from(editBrands).join(",") || "universal" });
+    setEditingId(null);
     reload();
   };
 
@@ -546,7 +561,7 @@ function ArticlesSection() {
     });
   };
 
-  // Фильтрация по категории
+  // Фильтрация по категории — на клиенте (быстро)
   const byCategory = activeCategory === "all" ? allArticles : allArticles.filter((a) => {
     const cat = CATEGORIES.find(c => c.id === activeCategory);
     if (!cat || !cat.keywords) return false;
@@ -554,11 +569,10 @@ function ArticlesSection() {
     return cat.keywords.some(k => hay.includes(k.toLowerCase()));
   });
 
-  // Фильтрация по марке (открывает поиск на Autodoc с маркой)
-  const articles = activeBrand === "all" ? byCategory : byCategory; // марка — визуальный фильтр для поиска
-
+  const articles = byCategory;
   const compareItems = allArticles.filter(a => compareIds.has(a.id));
 
+  const brandLabel = (id: string) => CAR_BRANDS.find(b => b.id === id)?.label || id;
   const brandSearchUrl = (brand: string) =>
     `https://www.autodoc.ru/search/by-text/?search=${encodeURIComponent(brand + " " + search)}`;
 
@@ -592,17 +606,13 @@ function ArticlesSection() {
 
       {/* Марки автомобилей */}
       <div className="space-y-2">
-        <p className="text-xs font-body text-muted-foreground uppercase tracking-widest">Поиск по марке авто</p>
+        <p className="text-xs font-body text-muted-foreground uppercase tracking-widest">Фильтр по марке авто</p>
         <div className="flex gap-2 flex-wrap">
           {CAR_BRANDS.map((b) => (
             <button
               key={b.id}
-              onClick={() => {
-                setActiveBrand(b.id);
-                if (b.id !== "all") setSearch(b.label === "VW" ? "Volkswagen" : b.label);
-                else setSearch("");
-              }}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-body font-medium border transition-all ${
+              onClick={() => { setActiveBrand(b.id); setSearch(""); }}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-body font-medium border transition-all active:scale-95 ${
                 activeBrand === b.id
                   ? "bg-primary/20 border-primary/50 text-primary"
                   : "bg-card border-border text-muted-foreground hover:border-primary/30 hover:text-foreground"
@@ -634,19 +644,56 @@ function ArticlesSection() {
       </div>
 
       {showForm && (
-        <div className="bg-card border border-primary/30 rounded-xl p-5 space-y-3 animate-fade-in">
+        <div className="bg-card border border-primary/30 rounded-xl p-5 space-y-4 animate-fade-in">
           <h3 className="font-display text-sm font-semibold text-foreground uppercase tracking-wide">Новая запчасть</h3>
           <div className="grid grid-cols-2 gap-3">
             <input value={form.article} onChange={(e) => setForm({ ...form, article: e.target.value })} placeholder="Артикул*"
               className="bg-secondary border border-border rounded-xl px-4 py-2.5 text-foreground font-body text-sm focus:outline-none focus:border-primary/60 transition-all" />
-            <input value={form.brand} onChange={(e) => setForm({ ...form, brand: e.target.value })} placeholder="Бренд"
+            <input value={form.brand} onChange={(e) => setForm({ ...form, brand: e.target.value })} placeholder="Производитель (Bosch, NGK…)"
               className="bg-secondary border border-border rounded-xl px-4 py-2.5 text-foreground font-body text-sm focus:outline-none focus:border-primary/60 transition-all" />
-            <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Название*"
+            <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Название запчасти*"
               className="col-span-2 bg-secondary border border-border rounded-xl px-4 py-2.5 text-foreground font-body text-sm focus:outline-none focus:border-primary/60 transition-all" />
             <input value={form.price} onChange={(e) => setForm({ ...form, price: Number(e.target.value) })} placeholder="Цена, ₽" type="number" min={0}
               className="bg-secondary border border-border rounded-xl px-4 py-2.5 text-foreground font-body text-sm focus:outline-none focus:border-primary/60 transition-all" />
             <input value={form.stock} onChange={(e) => setForm({ ...form, stock: Number(e.target.value) })} placeholder="Остаток, шт." type="number" min={0}
               className="bg-secondary border border-border rounded-xl px-4 py-2.5 text-foreground font-body text-sm focus:outline-none focus:border-primary/60 transition-all" />
+            <input value={form.shop_url} onChange={(e) => setForm({ ...form, shop_url: e.target.value })} placeholder="Ссылка на магазин (необязательно)"
+              className="col-span-2 bg-secondary border border-border rounded-xl px-4 py-2.5 text-foreground font-body text-sm focus:outline-none focus:border-primary/60 transition-all" />
+          </div>
+          <div className="space-y-2">
+            <p className="text-xs font-body text-muted-foreground">Подходит для марок автомобилей:</p>
+            <div className="flex gap-2 flex-wrap">
+              {CAR_BRANDS.filter(b => b.id !== "all").map((b) => {
+                const checked = formBrands.has(b.id) || formBrands.has("universal");
+                const isUniversal = b.id === "universal";
+                return (
+                  <button key={b.id} type="button"
+                    onClick={() => setFormBrands(prev => {
+                      const s = new Set(prev);
+                      if (s.has(b.id)) s.delete(b.id); else s.add(b.id);
+                      return s;
+                    })}
+                    className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-body border transition-all ${
+                      formBrands.has(b.id) ? "bg-primary/20 border-primary/50 text-primary" : "bg-secondary border-border text-muted-foreground hover:border-primary/30"
+                    }`}
+                  >
+                    {b.emoji} {b.label}
+                  </button>
+                );
+              })}
+              <button type="button"
+                onClick={() => setFormBrands(prev => {
+                  const s = new Set(prev);
+                  if (s.has("universal")) s.delete("universal"); else { s.clear(); s.add("universal"); }
+                  return s;
+                })}
+                className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-body border transition-all ${
+                  formBrands.has("universal") ? "bg-green-500/20 border-green-500/40 text-green-400" : "bg-secondary border-border text-muted-foreground hover:border-green-500/30"
+                }`}
+              >
+                🔧 Универсальная
+              </button>
+            </div>
           </div>
           <button onClick={handleAdd} disabled={saving}
             className="w-full bg-primary text-primary-foreground py-3 rounded-xl font-body font-semibold text-sm hover:brightness-110 transition-all disabled:opacity-50">
@@ -696,58 +743,115 @@ function ArticlesSection() {
               const isAdded = addedIds.has(a.id);
               const outOfStock = a.stock === 0;
               const inCompare = compareIds.has(a.id);
+              const isEditing = editingId === a.id;
+              const brands = (a.car_brands || "").split(",").filter(Boolean);
+              const isUniversal = brands.includes("universal");
+
               return (
-                <div
-                  key={a.id}
-                  className={`bg-card border rounded-xl px-4 py-3 flex items-center gap-3 transition-all group ${
-                    inCompare ? "border-blue-500/40 bg-blue-500/5" : "border-border hover:border-border/80"
-                  }`}
-                >
-                  {/* Чекбокс для сравнения */}
-                  <button
-                    onClick={() => toggleCompare(a.id)}
-                    className={`flex-shrink-0 w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all ${
-                      inCompare ? "bg-blue-500 border-blue-500 text-white" : "border-border hover:border-blue-400/50"
-                    }`}
-                    title="Добавить к сравнению"
-                  >
-                    {inCompare && <Icon name="Check" size={11} />}
-                  </button>
+                <div key={a.id} className="flex flex-col">
+                  <div className={`bg-card border rounded-xl px-4 py-3 flex items-center gap-3 transition-all ${
+                    inCompare ? "border-blue-500/40 bg-blue-500/5" : isEditing ? "border-primary/40 rounded-b-none" : "border-border hover:border-border/80"
+                  }`}>
+                    <button onClick={() => toggleCompare(a.id)}
+                      className={`flex-shrink-0 w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all ${
+                        inCompare ? "bg-blue-500 border-blue-500 text-white" : "border-border hover:border-blue-400/50"
+                      }`} title="Добавить к сравнению">
+                      {inCompare && <Icon name="Check" size={11} />}
+                    </button>
 
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="font-body text-sm font-medium text-foreground leading-tight">{a.name}</span>
-                      <span className="text-xs text-muted-foreground font-mono hidden sm:inline opacity-60">{a.article}</span>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="font-body text-sm font-medium text-foreground leading-tight">{a.name}</span>
+                        <span className="text-xs text-muted-foreground font-mono hidden sm:inline opacity-60">{a.article}</span>
+                      </div>
+                      <div className="flex items-center gap-2 mt-1 flex-wrap">
+                        <span className="font-body text-xs text-muted-foreground">{a.brand}</span>
+                        <StatusBadge status={a.status} />
+                        {/* Бейджи марок */}
+                        {isUniversal ? (
+                          <span className="text-xs font-body px-1.5 py-0.5 bg-green-500/10 text-green-400/80 rounded border border-green-500/20">🔧 универсал</span>
+                        ) : brands.slice(0, 4).map(bid => {
+                          const bInfo = CAR_BRANDS.find(b => b.id === bid);
+                          return bInfo ? (
+                            <span key={bid} className="text-xs font-body px-1.5 py-0.5 bg-primary/8 text-primary/70 rounded border border-primary/20">{bInfo.emoji} {bInfo.label}</span>
+                          ) : null;
+                        })}
+                        {!isUniversal && brands.length > 4 && (
+                          <span className="text-xs text-muted-foreground font-body">+{brands.length - 4}</span>
+                        )}
+                        {a.shop_url && (
+                          <a href={a.shop_url} target="_blank" rel="noopener noreferrer"
+                            className="text-xs font-body text-primary/60 hover:text-primary flex items-center gap-1 transition-colors">
+                            <Icon name="ExternalLink" size={10} />в магазине
+                          </a>
+                        )}
+                      </div>
                     </div>
-                    <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-                      <span className="font-body text-xs text-muted-foreground">{a.brand}</span>
-                      <StatusBadge status={a.status} />
-                      {a.shop_url && (
-                        <a href={a.shop_url} target="_blank" rel="noopener noreferrer"
-                          className="text-xs font-body text-primary/60 hover:text-primary flex items-center gap-1 transition-colors">
-                          <Icon name="ExternalLink" size={10} />в магазине
-                        </a>
-                      )}
+
+                    <div className="text-right flex-shrink-0 min-w-[72px]">
+                      <div className="font-display text-sm font-bold text-foreground">₽ {a.price.toLocaleString()}</div>
+                      <div className="text-xs text-muted-foreground font-body">{a.stock} шт.</div>
                     </div>
+
+                    {/* Кнопка редактировать марки */}
+                    <button
+                      onClick={() => {
+                        if (isEditing) { setEditingId(null); return; }
+                        setEditingId(a.id);
+                        setEditBrands(new Set(brands));
+                      }}
+                      className={`flex-shrink-0 w-8 h-8 rounded-xl flex items-center justify-center transition-all ${
+                        isEditing ? "bg-primary/20 border border-primary/40 text-primary" : "bg-secondary border border-border text-muted-foreground hover:border-primary/30 hover:text-primary"
+                      }`}
+                      title="Привязать к маркам авто"
+                    >
+                      <Icon name="Tags" size={13} />
+                    </button>
+
+                    <button onClick={() => handleAddToCart(a)} disabled={outOfStock}
+                      className={`flex-shrink-0 w-8 h-8 rounded-xl flex items-center justify-center transition-all ${
+                        isAdded ? "bg-green-500/20 border border-green-500/30 text-green-400"
+                        : outOfStock ? "bg-secondary border border-border text-muted-foreground opacity-30 cursor-not-allowed"
+                        : "bg-secondary border border-border text-muted-foreground hover:bg-primary/20 hover:border-primary/40 hover:text-primary active:scale-90"
+                      }`} title={outOfStock ? "Нет в наличии" : "В корзину"}>
+                      <Icon name={isAdded ? "Check" : "ShoppingCart"} size={14} />
+                    </button>
                   </div>
 
-                  <div className="text-right flex-shrink-0 min-w-[72px]">
-                    <div className="font-display text-sm font-bold text-foreground">₽ {a.price.toLocaleString()}</div>
-                    <div className="text-xs text-muted-foreground font-body">{a.stock} шт.</div>
-                  </div>
-
-                  <button
-                    onClick={() => handleAddToCart(a)}
-                    disabled={outOfStock}
-                    className={`flex-shrink-0 w-8 h-8 rounded-xl flex items-center justify-center transition-all ${
-                      isAdded ? "bg-green-500/20 border border-green-500/30 text-green-400"
-                      : outOfStock ? "bg-secondary border border-border text-muted-foreground opacity-30 cursor-not-allowed"
-                      : "bg-secondary border border-border text-muted-foreground hover:bg-primary/20 hover:border-primary/40 hover:text-primary active:scale-90"
-                    }`}
-                    title={outOfStock ? "Нет в наличии" : "В корзину"}
-                  >
-                    <Icon name={isAdded ? "Check" : "ShoppingCart"} size={14} />
-                  </button>
+                  {/* Панель редактирования марок */}
+                  {isEditing && (
+                    <div className="bg-card border border-t-0 border-primary/40 rounded-b-xl px-4 py-3 animate-fade-in">
+                      <p className="text-xs font-body text-muted-foreground mb-2">Выберите марки автомобилей для этой запчасти:</p>
+                      <div className="flex flex-wrap gap-1.5 mb-3">
+                        {CAR_BRANDS.filter(b => b.id !== "all").map(b => (
+                          <button key={b.id} type="button"
+                            onClick={() => setEditBrands(prev => { const s = new Set(prev); if (s.has(b.id)) s.delete(b.id); else s.add(b.id); return s; })}
+                            className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-body border transition-all ${
+                              editBrands.has(b.id) ? "bg-primary/20 border-primary/50 text-primary" : "bg-secondary border-border text-muted-foreground hover:border-primary/30"
+                            }`}>
+                            {b.emoji} {b.label}
+                          </button>
+                        ))}
+                        <button type="button"
+                          onClick={() => setEditBrands(prev => { const s = new Set(prev); if (s.has("universal")) s.delete("universal"); else { s.clear(); s.add("universal"); } return s; })}
+                          className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-body border transition-all ${
+                            editBrands.has("universal") ? "bg-green-500/20 border-green-500/40 text-green-400" : "bg-secondary border-border text-muted-foreground"
+                          }`}>
+                          🔧 Универсальная
+                        </button>
+                      </div>
+                      <div className="flex gap-2">
+                        <button onClick={() => handleSaveBrands(a)}
+                          className="bg-primary text-primary-foreground px-4 py-1.5 rounded-lg text-xs font-body font-semibold hover:brightness-110 transition-all">
+                          Сохранить
+                        </button>
+                        <button onClick={() => setEditingId(null)}
+                          className="bg-secondary text-muted-foreground px-4 py-1.5 rounded-lg text-xs font-body hover:text-foreground transition-all">
+                          Отмена
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               );
             })}
@@ -756,7 +860,8 @@ function ArticlesSection() {
                 <Icon name="PackageSearch" size={32} className="mx-auto opacity-30" />
                 <p>Запчастей не найдено</p>
                 {activeBrand !== "all" && (
-                  <a href={brandSearchUrl(search)} target="_blank" rel="noopener noreferrer"
+                  <a href={brandSearchUrl(activeBrand !== "all" ? CAR_BRANDS.find(b=>b.id===activeBrand)?.label || "" : "")}
+                    target="_blank" rel="noopener noreferrer"
                     className="inline-flex items-center gap-1.5 text-primary text-sm hover:underline">
                     <Icon name="ExternalLink" size={13} />
                     Поискать на Autodoc
