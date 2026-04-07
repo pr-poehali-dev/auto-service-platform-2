@@ -328,6 +328,7 @@ function ArticlesSection() {
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({ article: "", name: "", brand: "", price: 0, stock: 0 });
   const [saving, setSaving] = useState(false);
+  const [addedIds, setAddedIds] = useState<Set<number>>(new Set());
 
   const handleAdd = async () => {
     if (!form.article || !form.name) return;
@@ -337,6 +338,13 @@ function ArticlesSection() {
     setShowForm(false);
     setForm({ article: "", name: "", brand: "", price: 0, stock: 0 });
     reload();
+  };
+
+  const handleAddToCart = async (a: Article) => {
+    if (a.stock === 0) return;
+    await api.cart.add(a.id);
+    setAddedIds((prev) => new Set(prev).add(a.id));
+    setTimeout(() => setAddedIds((prev) => { const s = new Set(prev); s.delete(a.id); return s; }), 1500);
   };
 
   return (
@@ -378,19 +386,43 @@ function ArticlesSection() {
         className="w-full bg-card border border-border rounded-xl px-4 py-3 text-foreground font-body text-sm focus:outline-none focus:border-primary/60 focus:ring-2 focus:ring-primary/20 transition-all" />
 
       {loading ? <Spinner /> : (
-        <div className="bg-card border border-border rounded-xl overflow-hidden">
-          <div className="hidden md:grid grid-cols-[100px_1fr_80px_80px_120px] text-xs text-muted-foreground font-body uppercase tracking-wider px-5 py-3 border-b border-border bg-secondary/30">
-            <span>Артикул</span><span>Название</span><span className="text-center">Бренд</span><span className="text-right">Цена</span><span className="text-right">Наличие</span>
-          </div>
-          {articles.map((a, i) => (
-            <div key={a.id} className={`flex flex-col md:grid md:grid-cols-[100px_1fr_80px_80px_120px] gap-2 md:gap-0 items-start md:items-center px-5 py-3.5 transition-all hover:bg-secondary/40 cursor-pointer ${i < articles.length - 1 ? "border-b border-border/50" : ""}`}>
-              <span className="font-body text-xs text-muted-foreground tracking-wider">{a.article}</span>
-              <span className="font-body text-sm text-foreground">{a.name}</span>
-              <span className="font-body text-xs text-muted-foreground md:text-center">{a.brand}</span>
-              <span className="font-body text-sm font-semibold text-foreground md:text-right">₽ {a.price.toLocaleString()}</span>
-              <div className="md:text-right"><StatusBadge status={a.status} /></div>
-            </div>
-          ))}
+        <div className="space-y-2">
+          {articles.map((a) => {
+            const isAdded = addedIds.has(a.id);
+            const outOfStock = a.stock === 0;
+            return (
+              <div key={a.id} className="bg-card border border-border rounded-xl px-4 py-3.5 flex items-center gap-3 transition-all hover:border-border/80 group">
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="font-body text-sm font-medium text-foreground">{a.name}</span>
+                    <span className="text-xs text-muted-foreground font-body hidden sm:inline">{a.article}</span>
+                  </div>
+                  <div className="flex items-center gap-3 mt-0.5">
+                    <span className="font-body text-xs text-muted-foreground">{a.brand}</span>
+                    <StatusBadge status={a.status} />
+                  </div>
+                </div>
+                <div className="text-right flex-shrink-0">
+                  <div className="font-display text-base font-bold text-foreground">₽ {a.price.toLocaleString()}</div>
+                  <div className="text-xs text-muted-foreground font-body">{a.stock} шт.</div>
+                </div>
+                <button
+                  onClick={() => handleAddToCart(a)}
+                  disabled={outOfStock}
+                  className={`flex-shrink-0 w-9 h-9 rounded-xl flex items-center justify-center transition-all ${
+                    isAdded
+                      ? "bg-green-500/20 border border-green-500/30 text-green-400"
+                      : outOfStock
+                      ? "bg-secondary border border-border text-muted-foreground opacity-40 cursor-not-allowed"
+                      : "bg-secondary border border-border text-muted-foreground hover:bg-primary/20 hover:border-primary/40 hover:text-primary active:scale-90"
+                  }`}
+                  title={outOfStock ? "Нет в наличии" : "В корзину"}
+                >
+                  <Icon name={isAdded ? "Check" : "ShoppingCart"} size={15} />
+                </button>
+              </div>
+            );
+          })}
           {articles.length === 0 && <div className="text-center py-10 text-muted-foreground font-body text-sm">Запчастей не найдено</div>}
         </div>
       )}
