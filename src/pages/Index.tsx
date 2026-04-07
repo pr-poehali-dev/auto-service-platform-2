@@ -401,10 +401,116 @@ function GarageSection() {
   );
 }
 
+const CAR_BRANDS = [
+  { id: "all", label: "Все марки", emoji: "🔧" },
+  { id: "toyota", label: "Toyota", emoji: "🇯🇵" },
+  { id: "bmw", label: "BMW", emoji: "🇩🇪" },
+  { id: "volkswagen", label: "VW", emoji: "🇩🇪" },
+  { id: "honda", label: "Honda", emoji: "🇯🇵" },
+  { id: "hyundai", label: "Hyundai", emoji: "🇰🇷" },
+  { id: "kia", label: "Kia", emoji: "🇰🇷" },
+  { id: "mercedes", label: "Mercedes", emoji: "🇩🇪" },
+  { id: "audi", label: "Audi", emoji: "🇩🇪" },
+  { id: "lada", label: "Lada", emoji: "🇷🇺" },
+];
+
+const CATEGORIES = [
+  { id: "all", label: "Все", icon: "Package" },
+  { id: "brakes", label: "Тормоза", icon: "CircleDot", keywords: ["тормоз", "колодк", "диск", "суппорт", "барабан", "шланг тормоз"] },
+  { id: "oil", label: "Масла", icon: "Droplets", keywords: ["масло", "антифриз", "жидкость", "омывател"] },
+  { id: "filters", label: "Фильтры", icon: "Filter", keywords: ["фильтр"] },
+  { id: "suspension", label: "Подвеска", icon: "Settings2", keywords: ["амортизатор", "стойка", "сайлентблок", "шаровая", "подшипник", "пружин", "рычаг", "наконечник", "тяга"] },
+  { id: "engine", label: "Двигатель", icon: "Zap", keywords: ["ремень грм", "помпа", "ролик", "прокладка", "термостат", "сальник", "набор прокладок"] },
+  { id: "ignition", label: "Зажигание", icon: "Flame", keywords: ["свеч", "катушка", "провода", "зажигани"] },
+  { id: "transmission", label: "Трансмиссия", icon: "Cog", keywords: ["сцеплени", "шрус", "пыльник", "диск сцепл"] },
+  { id: "exhaust", label: "Выхлоп", icon: "Wind", keywords: ["катализатор", "глушитель", "гофра", "хомут", "выпускного"] },
+  { id: "electrical", label: "Электрика", icon: "Bolt", keywords: ["аккумулятор", "генератор", "стартер", "фара", "лампа", "датчик"] },
+  { id: "cooling", label: "Охлаждение", icon: "Thermometer", keywords: ["радиатор", "вентилятор", "шланг радиатор"] },
+  { id: "steering", label: "Рулевое", icon: "Steering", keywords: ["рейка", "насос гур", "жидкость гур", "рулевая"] },
+  { id: "bearings", label: "Подшипники", icon: "Circle", keywords: ["подшипник 6", "роликоподшипник"] },
+  { id: "sport", label: "Тюнинг", icon: "TrendingUp", keywords: ["спортивн", "bc racing", "eibach", "ap racing", "motul", "койловер"] },
+];
+
+const SHOPS = [
+  { key: "autodoc", label: "Autodoc", color: "#3b82f6", url: (q: string) => `https://www.autodoc.ru/search/by-text/?search=${encodeURIComponent(q)}` },
+  { key: "stance", label: "Stance", color: "#f97316", url: (q: string) => `https://stancebazztards.ru/index.php?route=product/search&search=${encodeURIComponent(q)}` },
+  { key: "techno", label: "Technobearing", color: "#a855f7", url: (q: string) => `https://technobearing.ru/search/?q=${encodeURIComponent(q)}` },
+];
+
+function PriceCompareModal({ items, onClose }: { items: Article[]; onClose: () => void }) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-fade-in">
+      <div className="bg-card border border-border rounded-2xl w-full max-w-2xl max-h-[80vh] flex flex-col shadow-2xl">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-border">
+          <div>
+            <h3 className="font-display text-lg font-bold text-foreground uppercase tracking-wide">Сравнение цен</h3>
+            <p className="text-xs text-muted-foreground font-body mt-0.5">{items.length} позиций · цены в вашем каталоге vs. магазины</p>
+          </div>
+          <button onClick={onClose} className="w-8 h-8 rounded-xl bg-secondary flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors">
+            <Icon name="X" size={16} />
+          </button>
+        </div>
+
+        <div className="overflow-auto flex-1">
+          <table className="w-full text-sm">
+            <thead className="sticky top-0 bg-card/95 backdrop-blur border-b border-border">
+              <tr>
+                <th className="text-left px-5 py-3 font-body text-xs text-muted-foreground uppercase tracking-wider font-semibold">Запчасть</th>
+                <th className="text-right px-3 py-3 font-body text-xs text-muted-foreground uppercase tracking-wider font-semibold">Ваша цена</th>
+                {SHOPS.map(s => (
+                  <th key={s.key} className="text-center px-3 py-3 font-body text-xs uppercase tracking-wider font-semibold" style={{ color: s.color }}>{s.label}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {items.map((a, i) => (
+                <tr key={a.id} className={`border-b border-border/40 hover:bg-secondary/30 transition-colors ${i % 2 === 0 ? "" : "bg-secondary/10"}`}>
+                  <td className="px-5 py-3.5">
+                    <div className="font-body text-sm font-medium text-foreground leading-tight">{a.name}</div>
+                    <div className="font-body text-xs text-muted-foreground mt-0.5">{a.article} · {a.brand}</div>
+                  </td>
+                  <td className="px-3 py-3.5 text-right">
+                    <span className="font-display text-sm font-bold text-primary">₽ {a.price.toLocaleString()}</span>
+                  </td>
+                  {SHOPS.map(s => (
+                    <td key={s.key} className="px-3 py-3.5 text-center">
+                      <a
+                        href={a.shop_url && a.shop_url.includes(s.key === "autodoc" ? "autodoc" : s.key === "stance" ? "stancebazztards" : "technobearing")
+                          ? a.shop_url
+                          : s.url(a.article)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-body font-medium transition-all hover:opacity-80 active:scale-95"
+                        style={{ background: `${s.color}18`, color: s.color, border: `1px solid ${s.color}30` }}
+                      >
+                        <Icon name="ExternalLink" size={10} />
+                        Найти
+                      </a>
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        <div className="px-6 py-4 border-t border-border bg-secondary/20 flex items-center justify-between">
+          <span className="text-xs text-muted-foreground font-body">Цены в магазинах могут отличаться от актуальных</span>
+          <button onClick={onClose} className="bg-primary text-primary-foreground px-4 py-2 rounded-xl text-sm font-body font-semibold hover:brightness-110 transition-all">
+            Закрыть
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function ArticlesSection() {
   const [search, setSearch] = useState("");
+  const [activeCategory, setActiveCategory] = useState("all");
+  const [activeBrand, setActiveBrand] = useState("all");
   const { data, loading, reload } = useApi(() => api.articles.list(search), [search]);
-  const articles: Article[] = data?.articles ?? [];
+  const allArticles: Article[] = data?.articles ?? [];
 
   useEffect(() => { reload(); }, [search]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -412,6 +518,8 @@ function ArticlesSection() {
   const [form, setForm] = useState({ article: "", name: "", brand: "", price: 0, stock: 0 });
   const [saving, setSaving] = useState(false);
   const [addedIds, setAddedIds] = useState<Set<number>>(new Set());
+  const [compareIds, setCompareIds] = useState<Set<number>>(new Set());
+  const [showCompare, setShowCompare] = useState(false);
 
   const handleAdd = async () => {
     if (!form.article || !form.name) return;
@@ -430,23 +538,99 @@ function ArticlesSection() {
     setTimeout(() => setAddedIds((prev) => { const s = new Set(prev); s.delete(a.id); return s; }), 1500);
   };
 
-  const SEARCH_SITES = [
-    { key: "autodoc", label: "Autodoc", url: (q: string) => `https://www.autodoc.ru/search/by-text/?search=${encodeURIComponent(q)}`, color: "hover:text-blue-400 hover:border-blue-400/30" },
-    { key: "stance", label: "Stance", url: (q: string) => `https://stancebazztards.ru/index.php?route=product/search&search=${encodeURIComponent(q)}`, color: "hover:text-orange-400 hover:border-orange-400/30" },
-    { key: "techno", label: "Techno", url: (q: string) => `https://technobearing.ru/search/?q=${encodeURIComponent(q)}`, color: "hover:text-purple-400 hover:border-purple-400/30" },
-  ];
+  const toggleCompare = (id: number) => {
+    setCompareIds((prev) => {
+      const s = new Set(prev);
+      if (s.has(id)) s.delete(id); else s.add(id);
+      return s;
+    });
+  };
+
+  // Фильтрация по категории
+  const byCategory = activeCategory === "all" ? allArticles : allArticles.filter((a) => {
+    const cat = CATEGORIES.find(c => c.id === activeCategory);
+    if (!cat || !cat.keywords) return false;
+    const hay = (a.name + " " + a.article).toLowerCase();
+    return cat.keywords.some(k => hay.includes(k.toLowerCase()));
+  });
+
+  // Фильтрация по марке (открывает поиск на Autodoc с маркой)
+  const articles = activeBrand === "all" ? byCategory : byCategory; // марка — визуальный фильтр для поиска
+
+  const compareItems = allArticles.filter(a => compareIds.has(a.id));
+
+  const brandSearchUrl = (brand: string) =>
+    `https://www.autodoc.ru/search/by-text/?search=${encodeURIComponent(brand + " " + search)}`;
 
   return (
-    <div className="animate-fade-in space-y-6">
+    <div className="animate-fade-in space-y-5">
+      {showCompare && compareItems.length > 0 && (
+        <PriceCompareModal items={compareItems} onClose={() => setShowCompare(false)} />
+      )}
+
       <div className="flex items-center justify-between">
         <div>
           <h2 className="font-display text-2xl font-bold text-foreground uppercase">Артикулы</h2>
           <p className="text-sm text-muted-foreground font-body">Каталог запчастей и комплектующих</p>
         </div>
-        <button onClick={() => setShowForm(!showForm)} className="bg-primary text-primary-foreground px-4 py-2 rounded-xl text-sm font-body font-semibold flex items-center gap-2 hover:brightness-110 transition-all">
-          <Icon name={showForm ? "X" : "Plus"} size={16} />
-          {showForm ? "Отмена" : "Добавить"}
-        </button>
+        <div className="flex items-center gap-2">
+          {compareIds.size > 0 && (
+            <button
+              onClick={() => setShowCompare(true)}
+              className="flex items-center gap-2 px-4 py-2 bg-blue-500/15 border border-blue-500/30 text-blue-400 rounded-xl text-sm font-body font-semibold hover:bg-blue-500/25 transition-all animate-fade-in"
+            >
+              <Icon name="GitCompare" size={15} />
+              Сравнить ({compareIds.size})
+            </button>
+          )}
+          <button onClick={() => setShowForm(!showForm)} className="bg-primary text-primary-foreground px-4 py-2 rounded-xl text-sm font-body font-semibold flex items-center gap-2 hover:brightness-110 transition-all">
+            <Icon name={showForm ? "X" : "Plus"} size={16} />
+            {showForm ? "Отмена" : "Добавить"}
+          </button>
+        </div>
+      </div>
+
+      {/* Марки автомобилей */}
+      <div className="space-y-2">
+        <p className="text-xs font-body text-muted-foreground uppercase tracking-widest">Поиск по марке авто</p>
+        <div className="flex gap-2 flex-wrap">
+          {CAR_BRANDS.map((b) => (
+            <button
+              key={b.id}
+              onClick={() => {
+                setActiveBrand(b.id);
+                if (b.id !== "all") setSearch(b.label === "VW" ? "Volkswagen" : b.label);
+                else setSearch("");
+              }}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-body font-medium border transition-all ${
+                activeBrand === b.id
+                  ? "bg-primary/20 border-primary/50 text-primary"
+                  : "bg-card border-border text-muted-foreground hover:border-primary/30 hover:text-foreground"
+              }`}
+            >
+              <span>{b.emoji}</span>
+              {b.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Категории */}
+      <div className="flex gap-1.5 flex-wrap">
+        {CATEGORIES.map((cat) => (
+          <button
+            key={cat.id}
+            onClick={() => setActiveCategory(cat.id)}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-body font-medium border transition-all ${
+              activeCategory === cat.id
+                ? "bg-primary/15 border-primary/40 text-primary"
+                : "bg-card border-border text-muted-foreground hover:border-border/80 hover:text-foreground"
+            }`}
+          >
+            <Icon name={cat.icon as "Package"} size={12} />
+            {cat.label}
+          </button>
+        ))}
       </div>
 
       {showForm && (
@@ -471,97 +655,117 @@ function ArticlesSection() {
         </div>
       )}
 
-      <div className="relative flex gap-2">
+      {/* Поиск */}
+      <div className="flex gap-2">
         <div className="relative flex-1">
           <Icon name="Search" size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-          <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Поиск по названию или артикулу..."
-            className="w-full bg-card border border-border rounded-xl pl-9 pr-4 py-3 text-foreground font-body text-sm focus:outline-none focus:border-primary/60 focus:ring-2 focus:ring-primary/20 transition-all" />
+          <input
+            value={search}
+            onChange={(e) => { setSearch(e.target.value); setActiveBrand("all"); }}
+            placeholder="Поиск по названию, артикулу или бренду..."
+            className="w-full bg-card border border-border rounded-xl pl-9 pr-4 py-3 text-foreground font-body text-sm focus:outline-none focus:border-primary/60 focus:ring-2 focus:ring-primary/20 transition-all"
+          />
         </div>
-        {search.trim().length >= 2 && (
-          <div className="flex gap-1.5 animate-fade-in">
-            {SEARCH_SITES.map((s) => (
-              <a
-                key={s.key}
-                href={s.url(search.trim())}
-                target="_blank"
-                rel="noopener noreferrer"
-                title={`Найти «${search}» на ${s.label}`}
-                className={`flex items-center gap-1.5 px-3 py-2 bg-card border border-border rounded-xl text-xs font-body font-medium text-muted-foreground transition-all ${s.color} hover:bg-secondary active:scale-95`}
-              >
-                <Icon name="ExternalLink" size={12} />
-                {s.label}
-              </a>
-            ))}
-          </div>
+        {activeBrand !== "all" && (
+          <a
+            href={brandSearchUrl(search)}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-1.5 px-4 py-2 bg-blue-500/10 border border-blue-500/20 text-blue-400 rounded-xl text-xs font-body font-medium hover:bg-blue-500/20 transition-all whitespace-nowrap"
+          >
+            <Icon name="ExternalLink" size={13} />
+            Autodoc
+          </a>
         )}
       </div>
 
+      {/* Список */}
       {loading ? <Spinner /> : (
-        <div className="space-y-2">
-          {articles.map((a) => {
-            const isAdded = addedIds.has(a.id);
-            const outOfStock = a.stock === 0;
-            return (
-              <div key={a.id} className="bg-card border border-border rounded-xl px-4 py-3.5 flex items-center gap-3 transition-all hover:border-border/80 group">
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="font-body text-sm font-medium text-foreground">{a.name}</span>
-                    <span className="text-xs text-muted-foreground font-body hidden sm:inline font-mono">{a.article}</span>
+        <>
+          <div className="flex items-center justify-between">
+            <span className="text-xs text-muted-foreground font-body">{articles.length} позиций</span>
+            {compareIds.size > 0 && (
+              <button onClick={() => setCompareIds(new Set())} className="text-xs text-muted-foreground font-body hover:text-foreground transition-colors flex items-center gap-1">
+                <Icon name="X" size={11} /> Сбросить выбор
+              </button>
+            )}
+          </div>
+
+          <div className="space-y-1.5">
+            {articles.map((a) => {
+              const isAdded = addedIds.has(a.id);
+              const outOfStock = a.stock === 0;
+              const inCompare = compareIds.has(a.id);
+              return (
+                <div
+                  key={a.id}
+                  className={`bg-card border rounded-xl px-4 py-3 flex items-center gap-3 transition-all group ${
+                    inCompare ? "border-blue-500/40 bg-blue-500/5" : "border-border hover:border-border/80"
+                  }`}
+                >
+                  {/* Чекбокс для сравнения */}
+                  <button
+                    onClick={() => toggleCompare(a.id)}
+                    className={`flex-shrink-0 w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all ${
+                      inCompare ? "bg-blue-500 border-blue-500 text-white" : "border-border hover:border-blue-400/50"
+                    }`}
+                    title="Добавить к сравнению"
+                  >
+                    {inCompare && <Icon name="Check" size={11} />}
+                  </button>
+
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="font-body text-sm font-medium text-foreground leading-tight">{a.name}</span>
+                      <span className="text-xs text-muted-foreground font-mono hidden sm:inline opacity-60">{a.article}</span>
+                    </div>
+                    <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                      <span className="font-body text-xs text-muted-foreground">{a.brand}</span>
+                      <StatusBadge status={a.status} />
+                      {a.shop_url && (
+                        <a href={a.shop_url} target="_blank" rel="noopener noreferrer"
+                          className="text-xs font-body text-primary/60 hover:text-primary flex items-center gap-1 transition-colors">
+                          <Icon name="ExternalLink" size={10} />в магазине
+                        </a>
+                      )}
+                    </div>
                   </div>
-                  <div className="flex items-center gap-3 mt-0.5 flex-wrap">
-                    <span className="font-body text-xs text-muted-foreground">{a.brand}</span>
-                    <StatusBadge status={a.status} />
-                    {a.shop_url && (
-                      <a
-                        href={a.shop_url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-xs font-body text-primary/70 hover:text-primary flex items-center gap-1 transition-colors"
-                        title="Открыть в магазине"
-                      >
-                        <Icon name="ExternalLink" size={10} />
-                        в магазине
-                      </a>
-                    )}
+
+                  <div className="text-right flex-shrink-0 min-w-[72px]">
+                    <div className="font-display text-sm font-bold text-foreground">₽ {a.price.toLocaleString()}</div>
+                    <div className="text-xs text-muted-foreground font-body">{a.stock} шт.</div>
                   </div>
-                </div>
-                <div className="text-right flex-shrink-0">
-                  <div className="font-display text-base font-bold text-foreground">₽ {a.price.toLocaleString()}</div>
-                  <div className="text-xs text-muted-foreground font-body">{a.stock} шт.</div>
-                </div>
-                <div className="flex items-center gap-1.5 flex-shrink-0">
-                  {!a.shop_url && SEARCH_SITES.map((s) => (
-                    <a
-                      key={s.key}
-                      href={s.url(a.article)}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      title={`Найти ${a.article} на ${s.label}`}
-                      className={`w-7 h-7 rounded-lg bg-secondary border border-border flex items-center justify-center text-muted-foreground transition-all ${s.color} hover:bg-secondary active:scale-90`}
-                    >
-                      <Icon name="ExternalLink" size={11} />
-                    </a>
-                  ))}
+
                   <button
                     onClick={() => handleAddToCart(a)}
                     disabled={outOfStock}
-                    className={`w-9 h-9 rounded-xl flex items-center justify-center transition-all ${
-                      isAdded
-                        ? "bg-green-500/20 border border-green-500/30 text-green-400"
-                        : outOfStock
-                        ? "bg-secondary border border-border text-muted-foreground opacity-40 cursor-not-allowed"
-                        : "bg-secondary border border-border text-muted-foreground hover:bg-primary/20 hover:border-primary/40 hover:text-primary active:scale-90"
+                    className={`flex-shrink-0 w-8 h-8 rounded-xl flex items-center justify-center transition-all ${
+                      isAdded ? "bg-green-500/20 border border-green-500/30 text-green-400"
+                      : outOfStock ? "bg-secondary border border-border text-muted-foreground opacity-30 cursor-not-allowed"
+                      : "bg-secondary border border-border text-muted-foreground hover:bg-primary/20 hover:border-primary/40 hover:text-primary active:scale-90"
                     }`}
                     title={outOfStock ? "Нет в наличии" : "В корзину"}
                   >
-                    <Icon name={isAdded ? "Check" : "ShoppingCart"} size={15} />
+                    <Icon name={isAdded ? "Check" : "ShoppingCart"} size={14} />
                   </button>
                 </div>
+              );
+            })}
+            {articles.length === 0 && (
+              <div className="text-center py-12 text-muted-foreground font-body text-sm space-y-2">
+                <Icon name="PackageSearch" size={32} className="mx-auto opacity-30" />
+                <p>Запчастей не найдено</p>
+                {activeBrand !== "all" && (
+                  <a href={brandSearchUrl(search)} target="_blank" rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 text-primary text-sm hover:underline">
+                    <Icon name="ExternalLink" size={13} />
+                    Поискать на Autodoc
+                  </a>
+                )}
               </div>
-            );
-          })}
-          {articles.length === 0 && <div className="text-center py-10 text-muted-foreground font-body text-sm">Запчастей не найдено</div>}
-        </div>
+            )}
+          </div>
+        </>
       )}
     </div>
   );
