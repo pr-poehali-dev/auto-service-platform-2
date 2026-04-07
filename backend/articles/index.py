@@ -26,14 +26,14 @@ def handler(event: dict, context) -> dict:
         search = params.get("q", "")
         if search:
             cur.execute("""
-                SELECT id, article, name, brand, price, stock, notes, created_at
+                SELECT id, article, name, brand, price, stock, notes, created_at, shop_url
                 FROM articles
-                WHERE name ILIKE %s OR article ILIKE %s
+                WHERE name ILIKE %s OR article ILIKE %s OR brand ILIKE %s
                 ORDER BY name
-            """, (f"%{search}%", f"%{search}%"))
+            """, (f"%{search}%", f"%{search}%", f"%{search}%"))
         else:
             cur.execute("""
-                SELECT id, article, name, brand, price, stock, notes, created_at
+                SELECT id, article, name, brand, price, stock, notes, created_at, shop_url
                 FROM articles ORDER BY name
             """)
         rows = cur.fetchall()
@@ -50,7 +50,8 @@ def handler(event: dict, context) -> dict:
                 "id": r[0], "article": r[1], "name": r[2], "brand": r[3],
                 "price": r[4], "stock": r[5], "notes": r[6],
                 "status": stock_status(r[5]),
-                "created_at": r[7].isoformat() if r[7] else None
+                "created_at": r[7].isoformat() if r[7] else None,
+                "shop_url": r[8],
             }
             for r in rows
         ]

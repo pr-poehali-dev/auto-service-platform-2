@@ -506,11 +506,23 @@ function ArticlesSection() {
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="font-body text-sm font-medium text-foreground">{a.name}</span>
-                    <span className="text-xs text-muted-foreground font-body hidden sm:inline">{a.article}</span>
+                    <span className="text-xs text-muted-foreground font-body hidden sm:inline font-mono">{a.article}</span>
                   </div>
-                  <div className="flex items-center gap-3 mt-0.5">
+                  <div className="flex items-center gap-3 mt-0.5 flex-wrap">
                     <span className="font-body text-xs text-muted-foreground">{a.brand}</span>
                     <StatusBadge status={a.status} />
+                    {a.shop_url && (
+                      <a
+                        href={a.shop_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-xs font-body text-primary/70 hover:text-primary flex items-center gap-1 transition-colors"
+                        title="Открыть в магазине"
+                      >
+                        <Icon name="ExternalLink" size={10} />
+                        в магазине
+                      </a>
+                    )}
                   </div>
                 </div>
                 <div className="text-right flex-shrink-0">
@@ -518,7 +530,7 @@ function ArticlesSection() {
                   <div className="text-xs text-muted-foreground font-body">{a.stock} шт.</div>
                 </div>
                 <div className="flex items-center gap-1.5 flex-shrink-0">
-                  {SEARCH_SITES.map((s) => (
+                  {!a.shop_url && SEARCH_SITES.map((s) => (
                     <a
                       key={s.key}
                       href={s.url(a.article)}

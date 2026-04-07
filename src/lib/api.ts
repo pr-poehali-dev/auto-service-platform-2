@@ -39,6 +39,7 @@ export interface Article {
   stock: number;
   status: "in_stock" | "out_of_stock" | "low_stock";
   notes?: string;
+  shop_url?: string;
 }
 
 export interface Order {
