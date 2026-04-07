@@ -14,13 +14,13 @@ type Section =
 
 const NAV_ITEMS: { id: Section; label: string; icon: string; badge?: number }[] = [
   { id: "home", label: "Главная", icon: "Home" },
+  { id: "articles", label: "Каталог", icon: "Package" },
   { id: "garage", label: "Гараж", icon: "Car" },
-  { id: "articles", label: "Артикулы", icon: "Package" },
   { id: "orders", label: "Заказы", icon: "ClipboardList" },
-  { id: "cart", label: "Корзина", icon: "ShoppingCart", badge: 3 },
+  { id: "cart", label: "Корзина", icon: "ShoppingCart" },
   { id: "profile", label: "Профиль", icon: "User", badge: 5 },
   { id: "stats", label: "Статистика", icon: "BarChart3" },
-  { id: "contacts", label: "Контакты", icon: "Phone" },
+  { id: "contacts", label: "О нас", icon: "Info" },
 ];
 
 function useApi<T>(fn: () => Promise<T>, deps: unknown[] = []) {
@@ -60,7 +60,7 @@ function StatusBadge({ status }: { status: string }) {
   );
 }
 
-function HomeSection({ onSearch }: { onSearch: (vin: string) => void }) {
+function HomeSection({ onSearch, onNavigate }: { onSearch: (vin: string) => void; onNavigate: (section: string) => void }) {
   const [vin, setVin] = useState("");
   const [scanning, setScanning] = useState(false);
   const [vinInfo, setVinInfo] = useState<VinInfo | null>(null);
@@ -77,6 +77,9 @@ function HomeSection({ onSearch }: { onSearch: (vin: string) => void }) {
   const activeOrders = orders.filter((o) => o.status === "in_work" || o.status === "waiting");
   const lowStock = articles.filter((a) => a.stock <= 2);
   const totalRevenue = orders.filter((o) => o.status === "done").reduce((s, o) => s + o.amount, 0);
+  const todayRevenue = orders
+    .filter((o) => o.status === "done" && o.created_at && new Date(o.created_at).toDateString() === new Date().toDateString())
+    .reduce((s, o) => s + o.amount, 0);
 
   const handleVinSearch = async () => {
     if (vin.length !== 17) { setVinError("VIN должен содержать 17 символов"); return; }
@@ -114,26 +117,37 @@ function HomeSection({ onSearch }: { onSearch: (vin: string) => void }) {
   };
 
   return (
-    <div className="animate-fade-in space-y-8">
-      <div className="relative rounded-2xl overflow-hidden" style={{ minHeight: 220 }}>
-        <img
-          src="https://cdn.poehali.dev/projects/693575df-8572-4ad9-8d4d-811f0c32f615/files/298a6b94-3b47-4265-87cf-abf0569260c1.jpg"
-          alt="Автосервис"
-          className="w-full h-56 object-cover opacity-60"
-        />
-        <div className="absolute inset-0 bg-gradient-to-r from-background via-background/70 to-transparent" />
-        <div className="absolute inset-0 flex flex-col justify-center px-8">
-          <p className="text-xs font-body tracking-widest text-primary uppercase mb-2">Платформа управления</p>
-          <h1 className="font-display text-5xl font-bold text-foreground leading-tight mb-1">
+    <div className="animate-fade-in">
+      {/* ─── Хедер страницы ─── */}
+      <div className="flex items-start justify-between mb-7 gap-4">
+        <div>
+          <p className="text-xs font-body tracking-widest text-primary uppercase mb-1">Добро пожаловать</p>
+          <h1 className="font-display text-3xl font-bold text-foreground leading-tight">
             AUTO<span className="text-primary">PRO</span>
           </h1>
-          <p className="text-muted-foreground font-body text-sm max-w-xs">
-            Поиск запчастей, управление заказами и гаражом клиентов
-          </p>
+          <p className="text-sm text-muted-foreground font-body mt-1">Платформа управления автосервисом</p>
+        </div>
+        {/* Мини-статистика сегодня */}
+        <div className="flex gap-3 flex-shrink-0">
+          <div className="bg-card border border-border rounded-xl px-4 py-3 text-right min-w-[90px]">
+            <div className="text-xs text-muted-foreground font-body mb-0.5">Сегодня</div>
+            <div className="font-display text-lg font-bold text-green-400">
+              {todayRevenue > 0 ? `₽ ${todayRevenue.toLocaleString()}` : "—"}
+            </div>
+            <div className="text-[10px] text-muted-foreground font-body">выручка</div>
+          </div>
+          <div className="bg-card border border-border rounded-xl px-4 py-3 text-right min-w-[90px]">
+            <div className="text-xs text-muted-foreground font-body mb-0.5">Всего</div>
+            <div className="font-display text-lg font-bold text-primary">
+              {totalRevenue > 0 ? `₽ ${totalRevenue.toLocaleString()}` : "—"}
+            </div>
+            <div className="text-[10px] text-muted-foreground font-body">прибыль</div>
+          </div>
         </div>
       </div>
 
-      <div className="space-y-3">
+      {/* ─── Поиск VIN ─── */}
+      <div className="space-y-3 mb-7">
         <p className="text-xs font-body tracking-widest text-muted-foreground uppercase">Поиск запчастей по VIN</p>
         <div className="flex gap-2">
           <div className="relative flex-1">
@@ -145,32 +159,22 @@ function HomeSection({ onSearch }: { onSearch: (vin: string) => void }) {
               className="vin-input w-full bg-card border border-border rounded-xl px-4 py-3.5 text-foreground font-body tracking-wider text-sm focus:outline-none focus:border-primary/60 focus:ring-2 focus:ring-primary/20 transition-all pr-14"
               maxLength={17}
             />
-            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground font-body">
-              {vin.length}/17
-            </span>
+            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground font-body">{vin.length}/17</span>
           </div>
-          <button
-            onClick={handleVinSearch}
-            disabled={vinLoading}
-            className="bg-primary text-primary-foreground px-6 rounded-xl font-body font-semibold text-sm hover:brightness-110 transition-all active:scale-95 disabled:opacity-60 flex items-center gap-2 min-w-[80px] justify-center"
-          >
+          <button onClick={handleVinSearch} disabled={vinLoading}
+            className="bg-primary text-primary-foreground px-6 rounded-xl font-body font-semibold text-sm hover:brightness-110 transition-all active:scale-95 disabled:opacity-60 flex items-center gap-2 min-w-[80px] justify-center">
             {vinLoading ? <div className="w-4 h-4 border-2 border-primary-foreground border-t-transparent rounded-full animate-spin" /> : "Найти"}
           </button>
-          <button
-            onClick={scanning ? stopScan : startScan}
-            className={`px-4 rounded-xl border transition-all active:scale-95 ${
-              scanning ? "bg-primary/20 border-primary text-primary" : "bg-card border-border text-muted-foreground hover:border-primary/40 hover:text-primary"
-            }`}
-            title="Сканировать VIN через камеру"
-          >
+          <button onClick={scanning ? stopScan : startScan}
+            className={`px-4 rounded-xl border transition-all active:scale-95 ${scanning ? "bg-primary/20 border-primary text-primary" : "bg-card border-border text-muted-foreground hover:border-primary/40 hover:text-primary"}`}
+            title="Сканировать VIN через камеру">
             <Icon name="Camera" size={20} />
           </button>
         </div>
 
         {vinError && (
           <div className="flex items-center gap-2 text-red-400 text-xs font-body animate-fade-in">
-            <Icon name="AlertCircle" size={13} />
-            {vinError}
+            <Icon name="AlertCircle" size={13} />{vinError}
           </div>
         )}
 
@@ -184,29 +188,23 @@ function HomeSection({ onSearch }: { onSearch: (vin: string) => void }) {
                 </span>
                 {vinInfo.year && <span className="text-xs text-muted-foreground font-body">{vinInfo.year} г.</span>}
               </div>
-              <div className="flex items-center gap-1.5">
-                {vinInfo.valid
-                  ? <span className="text-xs font-body text-green-400 flex items-center gap-1"><Icon name="CheckCircle" size={12} />VIN корректный</span>
-                  : <span className="text-xs font-body text-yellow-400 flex items-center gap-1"><Icon name="AlertTriangle" size={12} />Возможна ошибка</span>
-                }
-              </div>
+              {vinInfo.valid
+                ? <span className="text-xs font-body text-green-400 flex items-center gap-1"><Icon name="CheckCircle" size={12} />VIN корректный</span>
+                : <span className="text-xs font-body text-yellow-400 flex items-center gap-1"><Icon name="AlertTriangle" size={12} />Возможна ошибка</span>}
             </div>
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-0">
+            <div className="grid grid-cols-2 md:grid-cols-3">
               {[
                 { label: "VIN", value: vinInfo.vin },
                 { label: "Марка", value: vinInfo.make_display || vinInfo.make },
                 { label: "Модель", value: vinInfo.model },
                 { label: "Год", value: vinInfo.year },
-                { label: "Серия", value: vinInfo.series },
                 { label: "Кузов", value: vinInfo.body_class },
                 { label: "Двигатель", value: vinInfo.displacement ? `${vinInfo.displacement}L ${vinInfo.cylinders ? `(${vinInfo.cylinders} цил.)` : ""}` : undefined },
                 { label: "Топливо", value: vinInfo.fuel_type },
                 { label: "Привод", value: vinInfo.drive_type },
-                { label: "КПП", value: vinInfo.transmission },
                 { label: "Страна", value: vinInfo.plant_country },
-                { label: "Производитель", value: vinInfo.manufacturer },
               ].filter((r) => r.value).map((row, i) => (
-                <div key={i} className="px-4 py-2.5 border-b border-r border-border/40 last:border-b-0">
+                <div key={i} className="px-4 py-2.5 border-b border-r border-border/40">
                   <div className="text-xs text-muted-foreground font-body">{row.label}</div>
                   <div className="text-sm font-body font-medium text-foreground mt-0.5 truncate">{row.value}</div>
                 </div>
@@ -221,8 +219,7 @@ function HomeSection({ onSearch }: { onSearch: (vin: string) => void }) {
               ].map((s) => (
                 <a key={s.label} href={s.url} target="_blank" rel="noopener noreferrer"
                   className={`flex items-center gap-1.5 px-3 py-1.5 bg-card border border-border rounded-xl text-xs font-body text-muted-foreground transition-all ${s.color} hover:bg-secondary active:scale-95`}>
-                  <Icon name="ExternalLink" size={11} />
-                  {s.label}
+                  <Icon name="ExternalLink" size={11} />{s.label}
                 </a>
               ))}
             </div>
@@ -243,33 +240,77 @@ function HomeSection({ onSearch }: { onSearch: (vin: string) => void }) {
             <div className="absolute bottom-2 left-0 right-0 text-center">
               <span className="text-xs text-primary font-body bg-background/80 px-3 py-1 rounded-full">Наведите камеру на VIN-код</span>
             </div>
-            <button onClick={stopScan} className="absolute top-2 right-2 bg-background/80 rounded-lg px-3 py-1 text-xs text-foreground font-body">
-              ✕ Закрыть
-            </button>
+            <button onClick={stopScan} className="absolute top-2 right-2 bg-background/80 rounded-lg px-3 py-1 text-xs text-foreground font-body">✕ Закрыть</button>
           </div>
         )}
       </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        {[
-          { icon: "Car", label: "Автомобилей в гараже", value: String(cars.length), color: "text-blue-400" },
-          { icon: "ClipboardList", label: "Активных заказов", value: String(activeOrders.length), color: "text-orange-400" },
-          { icon: "Package", label: "Позиций в каталоге", value: String(articles.length), color: "text-purple-400" },
-          { icon: "TrendingUp", label: "Выручка (выдано)", value: totalRevenue > 0 ? `₽ ${totalRevenue.toLocaleString()}` : "—", color: "text-green-400" },
-        ].map((item, i) => (
-          <div key={i} className="stat-card p-4 card-hover cursor-pointer">
-            <Icon name={item.icon as "Car"} size={22} className={`${item.color} mb-3`} />
-            <div className="font-display text-xl font-bold text-foreground">{item.value}</div>
-            <div className="text-xs text-muted-foreground font-body mt-0.5">{item.label}</div>
-          </div>
-        ))}
+      {/* ─── Быстрый доступ ─── */}
+      <div className="mb-7">
+        <p className="text-xs font-body tracking-widest text-muted-foreground uppercase mb-3">Быстрый доступ</p>
+        <div className="grid grid-cols-2 gap-3">
+          {[
+            { icon: "Package", label: "Каталог запчастей", sub: "Поиск по марке и модели", section: "articles", color: "from-primary/20 to-primary/5", border: "border-primary/30", iconColor: "text-primary" },
+            { icon: "Car", label: "Мой гараж", sub: "Сохранённые автомобили", section: "garage", color: "from-blue-500/20 to-blue-500/5", border: "border-blue-500/30", iconColor: "text-blue-400" },
+            { icon: "ClipboardList", label: "Мои заказы", sub: "История и статусы", section: "orders", color: "from-purple-500/20 to-purple-500/5", border: "border-purple-500/30", iconColor: "text-purple-400" },
+            { icon: "Phone", label: "О мастерской", sub: "Адрес и контакты", section: "contacts", color: "from-green-500/20 to-green-500/5", border: "border-green-500/30", iconColor: "text-green-400" },
+          ].map((item) => (
+            <button
+              key={item.section}
+              onClick={() => onNavigate(item.section)}
+              className={`bg-gradient-to-br ${item.color} border ${item.border} rounded-2xl p-4 text-left hover:brightness-110 transition-all active:scale-95 group`}
+            >
+              <div className={`w-10 h-10 rounded-xl bg-background/30 flex items-center justify-center mb-3 group-hover:scale-110 transition-transform`}>
+                <Icon name={item.icon as "Package"} size={20} className={item.iconColor} />
+              </div>
+              <div className="font-display text-sm font-bold text-foreground leading-tight">{item.label}</div>
+              <div className="text-xs text-muted-foreground font-body mt-0.5">{item.sub}</div>
+            </button>
+          ))}
+        </div>
       </div>
 
+      {/* ─── Популярные товары ─── */}
+      <div className="mb-7">
+        <div className="flex items-end justify-between mb-4">
+          <h2 className="font-display text-2xl font-bold text-foreground uppercase leading-tight">
+            Популярные<br />товары
+          </h2>
+          <button onClick={() => onNavigate("articles")}
+            className="text-sm font-body text-primary hover:brightness-125 transition-colors flex items-center gap-1 mb-1">
+            Все товары <Icon name="ArrowRight" size={14} />
+          </button>
+        </div>
+        <div className="space-y-2">
+          {articles.slice(0, 6).map((a) => (
+            <div key={a.id} className="bg-card border border-border rounded-xl px-4 py-3 flex items-center gap-3 hover:border-border/70 transition-all">
+              <div className="w-9 h-9 bg-primary/10 border border-primary/20 rounded-xl flex items-center justify-center flex-shrink-0">
+                <Icon name="Package" size={15} className="text-primary" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="font-body text-sm font-medium text-foreground truncate">{a.name}</div>
+                <div className="text-xs text-muted-foreground font-body">{a.brand} · {a.article}</div>
+              </div>
+              <div className="text-right flex-shrink-0">
+                <div className="font-display text-sm font-bold text-foreground">₽ {a.price.toLocaleString()}</div>
+                <StatusBadge status={a.status} />
+              </div>
+            </div>
+          ))}
+          {articles.length === 0 && (
+            <div className="text-center py-8 text-muted-foreground font-body text-sm">Загрузка каталога...</div>
+          )}
+        </div>
+      </div>
+
+      {/* ─── Последние заказы + низкий остаток ─── */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div className="bg-card border border-border rounded-xl p-4">
           <div className="flex items-center justify-between mb-3">
             <h3 className="font-display text-sm font-semibold text-foreground uppercase tracking-wide">Последние заказы</h3>
-            <Icon name="ArrowRight" size={14} className="text-muted-foreground" />
+            <button onClick={() => onNavigate("orders")} className="text-xs text-primary font-body hover:brightness-125 transition-colors flex items-center gap-1">
+              Все <Icon name="ArrowRight" size={11} />
+            </button>
           </div>
           <div className="space-y-2">
             {orders.slice(0, 3).map((o) => (
@@ -290,11 +331,11 @@ function HomeSection({ onSearch }: { onSearch: (vin: string) => void }) {
 
         <div className="bg-card border border-border rounded-xl p-4">
           <div className="flex items-center justify-between mb-3">
-            <h3 className="font-display text-sm font-semibold text-foreground uppercase tracking-wide">Заканчиваются запчасти</h3>
+            <h3 className="font-display text-sm font-semibold text-foreground uppercase tracking-wide">Заканчиваются</h3>
             <Icon name="AlertTriangle" size={14} className="text-yellow-400" />
           </div>
           <div className="space-y-2">
-            {lowStock.map((a) => (
+            {lowStock.slice(0, 4).map((a) => (
               <div key={a.id} className="flex items-center justify-between py-2 border-b border-border/50 last:border-0">
                 <div>
                   <div className="text-sm font-body text-foreground">{a.name}</div>
@@ -1272,6 +1313,44 @@ function ContactsSection() {
   );
 }
 
+function SidebarStats() {
+  const { data: ordersData } = useApi(() => api.orders.list());
+  const orders = ordersData?.orders ?? [];
+
+  const today = new Date().toDateString();
+  const todayRevenue = orders
+    .filter((o) => o.status === "done" && o.created_at && new Date(o.created_at).toDateString() === today)
+    .reduce((s, o) => s + o.amount, 0);
+  const totalRevenue = orders.filter((o) => o.status === "done").reduce((s, o) => s + o.amount, 0);
+  const profit = Math.round(totalRevenue * 0.33);
+
+  return (
+    <div className="mx-2 mb-2 bg-sidebar-accent border border-sidebar-border rounded-xl p-3 space-y-2">
+      <p className="text-[10px] font-body uppercase tracking-widest text-muted-foreground">Статистика продаж</p>
+      <div className="space-y-1.5">
+        <div className="flex items-center justify-between">
+          <span className="text-xs text-muted-foreground font-body">Сегодня</span>
+          <span className="text-xs font-display font-bold text-green-400">
+            {todayRevenue > 0 ? `₽ ${todayRevenue.toLocaleString()}` : "—"}
+          </span>
+        </div>
+        <div className="flex items-center justify-between">
+          <span className="text-xs text-muted-foreground font-body">Выручка</span>
+          <span className="text-xs font-display font-bold text-primary">
+            {totalRevenue > 0 ? `₽ ${totalRevenue.toLocaleString()}` : "—"}
+          </span>
+        </div>
+        <div className="flex items-center justify-between">
+          <span className="text-xs text-muted-foreground font-body">Прибыль</span>
+          <span className="text-xs font-display font-bold text-blue-400">
+            {profit > 0 ? `₽ ${profit.toLocaleString()}` : "—"}
+          </span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function Index() {
   const [active, setActive] = useState<Section>("home");
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -1284,7 +1363,7 @@ export default function Index() {
 
   const renderSection = () => {
     switch (active) {
-      case "home": return <HomeSection onSearch={(vin) => console.log("Search VIN:", vin)} />;
+      case "home": return <HomeSection onSearch={(vin) => console.log("Search VIN:", vin)} onNavigate={(s) => setActive(s as Section)} />;
       case "garage": return <GarageSection />;
       case "articles": return <ArticlesSection />;
       case "orders": return <OrdersSection />;
@@ -1365,6 +1444,9 @@ export default function Index() {
               </button>
             ))}
           </nav>
+
+          {/* Статистика продаж в сайдбаре */}
+          <SidebarStats />
 
           <div className="p-3 border-t border-sidebar-border">
             <div className="flex items-center gap-2.5 px-2 py-2">
