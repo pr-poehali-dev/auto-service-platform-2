@@ -1,0 +1,12 @@
+{
+  "tests": [
+    {
+      "name": "GET articles list",
+      "method": "GET",
+      "path": "/",
+      "expectedStatus": 200,
+      "expectedBody": {"articles": []},
+      "bodyMatcher": "string_contains"
+    }
+  ]
+}

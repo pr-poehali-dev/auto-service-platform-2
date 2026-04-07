@@ -1,5 +1,6 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import Icon from "@/components/ui/icon";
+import { api, type Car, type Article, type Order, type CartItem } from "@/lib/api";
 
 type Section =
   | "home"
@@ -22,32 +23,24 @@ const NAV_ITEMS: { id: Section; label: string; icon: string; badge?: number }[] 
   { id: "contacts", label: "Контакты", icon: "Phone" },
 ];
 
-const MOCK_CARS = [
-  { id: 1, vin: "XTA211440L2158000", brand: "Lada", model: "Vesta", year: 2020, client: "Иванов А.В.", color: "#c0392b" },
-  { id: 2, vin: "WBA3A5C55FF953411", brand: "BMW", model: "3 Series", year: 2019, client: "Петров С.И.", color: "#2c3e50" },
-  { id: 3, vin: "1HGBH41JXMN109186", brand: "Honda", model: "Civic", year: 2021, client: "Сидоров П.П.", color: "#e67e22" },
-];
+function useApi<T>(fn: () => Promise<T>, deps: unknown[] = []) {
+  const [data, setData] = useState<T | null>(null);
+  const [loading, setLoading] = useState(true);
+  const reload = useCallback(() => {
+    setLoading(true);
+    fn().then(setData).finally(() => setLoading(false));
+  }, deps); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { reload(); }, [reload]);
+  return { data, loading, reload };
+}
 
-const MOCK_ARTICLES = [
-  { id: 1, article: "BP-2134", name: "Тормозные колодки передние", brand: "Brembo", price: 3200, stock: 8, status: "in_stock" },
-  { id: 2, article: "FF-5521", name: "Масляный фильтр", brand: "Mann", price: 450, stock: 24, status: "in_stock" },
-  { id: 3, article: "SP-7892", name: "Свечи зажигания (к-т)", brand: "NGK", price: 1800, stock: 0, status: "out_of_stock" },
-  { id: 4, article: "TR-3300", name: "Амортизатор передний", brand: "KYB", price: 5600, stock: 2, status: "low_stock" },
-  { id: 5, article: "BE-1190", name: "Ремень ГРМ", brand: "Gates", price: 2100, stock: 6, status: "in_stock" },
-];
-
-const MOCK_ORDERS = [
-  { id: "ORD-001", client: "Иванов А.В.", car: "Lada Vesta", date: "05.04.2026", amount: 12400, status: "in_work" },
-  { id: "ORD-002", client: "Петров С.И.", car: "BMW 3 Series", date: "04.04.2026", amount: 34800, status: "ready" },
-  { id: "ORD-003", client: "Сидоров П.П.", car: "Honda Civic", date: "03.04.2026", amount: 8700, status: "done" },
-  { id: "ORD-004", client: "Козлов Р.А.", car: "Toyota Camry", date: "02.04.2026", amount: 15200, status: "waiting" },
-];
-
-const MOCK_CART = [
-  { id: 1, article: "BP-2134", name: "Тормозные колодки передние", brand: "Brembo", price: 3200, qty: 2 },
-  { id: 2, article: "FF-5521", name: "Масляный фильтр", brand: "Mann", price: 450, qty: 1 },
-  { id: 3, article: "TR-3300", name: "Амортизатор передний", brand: "KYB", price: 5600, qty: 1 },
-];
+function Spinner() {
+  return (
+    <div className="flex items-center justify-center py-12">
+      <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+    </div>
+  );
+}
 
 function StatusBadge({ status }: { status: string }) {
   const map: Record<string, { label: string; color: string }> = {
@@ -71,14 +64,22 @@ function HomeSection({ onSearch }: { onSearch: (vin: string) => void }) {
   const [vin, setVin] = useState("");
   const [scanning, setScanning] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
+  const { data: carsData } = useApi(() => api.cars.list());
+  const { data: ordersData } = useApi(() => api.orders.list());
+  const { data: articlesData } = useApi(() => api.articles.list());
+
+  const cars = carsData?.cars ?? [];
+  const orders = ordersData?.orders ?? [];
+  const articles = articlesData?.articles ?? [];
+  const activeOrders = orders.filter((o) => o.status === "in_work" || o.status === "waiting");
+  const lowStock = articles.filter((a) => a.stock <= 2);
+  const totalRevenue = orders.filter((o) => o.status === "done").reduce((s, o) => s + o.amount, 0);
 
   const startScan = async () => {
     setScanning(true);
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-      }
+      if (videoRef.current) videoRef.current.srcObject = stream;
     } catch {
       setScanning(false);
       alert("Нет доступа к камере");
@@ -168,10 +169,10 @@ function HomeSection({ onSearch }: { onSearch: (vin: string) => void }) {
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         {[
-          { icon: "Car", label: "Автомобилей в гараже", value: "3", color: "text-blue-400" },
-          { icon: "ClipboardList", label: "Активных заказов", value: "2", color: "text-orange-400" },
-          { icon: "Package", label: "Позиций в каталоге", value: "5", color: "text-purple-400" },
-          { icon: "TrendingUp", label: "Выручка за месяц", value: "₽ 71 100", color: "text-green-400" },
+          { icon: "Car", label: "Автомобилей в гараже", value: String(cars.length), color: "text-blue-400" },
+          { icon: "ClipboardList", label: "Активных заказов", value: String(activeOrders.length), color: "text-orange-400" },
+          { icon: "Package", label: "Позиций в каталоге", value: String(articles.length), color: "text-purple-400" },
+          { icon: "TrendingUp", label: "Выручка (выдано)", value: totalRevenue > 0 ? `₽ ${totalRevenue.toLocaleString()}` : "—", color: "text-green-400" },
         ].map((item, i) => (
           <div key={i} className="stat-card p-4 card-hover cursor-pointer">
             <Icon name={item.icon as "Car"} size={22} className={`${item.color} mb-3`} />
@@ -188,11 +189,11 @@ function HomeSection({ onSearch }: { onSearch: (vin: string) => void }) {
             <Icon name="ArrowRight" size={14} className="text-muted-foreground" />
           </div>
           <div className="space-y-2">
-            {MOCK_ORDERS.slice(0, 3).map((o) => (
+            {orders.slice(0, 3).map((o) => (
               <div key={o.id} className="flex items-center justify-between py-2 border-b border-border/50 last:border-0">
                 <div>
-                  <div className="text-sm font-body text-foreground">{o.client}</div>
-                  <div className="text-xs text-muted-foreground font-body">{o.car}</div>
+                  <div className="text-sm font-body text-foreground">{o.client_name}</div>
+                  <div className="text-xs text-muted-foreground font-body">{o.car_label}</div>
                 </div>
                 <div className="text-right">
                   <div className="text-sm font-body font-medium text-foreground">₽ {o.amount.toLocaleString()}</div>
@@ -200,6 +201,7 @@ function HomeSection({ onSearch }: { onSearch: (vin: string) => void }) {
                 </div>
               </div>
             ))}
+            {orders.length === 0 && <div className="text-sm text-muted-foreground font-body py-2">Заказов пока нет</div>}
           </div>
         </div>
 
@@ -209,22 +211,16 @@ function HomeSection({ onSearch }: { onSearch: (vin: string) => void }) {
             <Icon name="AlertTriangle" size={14} className="text-yellow-400" />
           </div>
           <div className="space-y-2">
-            {MOCK_ARTICLES.filter((a) => a.stock <= 2).map((a) => (
+            {lowStock.map((a) => (
               <div key={a.id} className="flex items-center justify-between py-2 border-b border-border/50 last:border-0">
                 <div>
                   <div className="text-sm font-body text-foreground">{a.name}</div>
                   <div className="text-xs text-muted-foreground font-body">{a.article} · {a.brand}</div>
                 </div>
-                <div className="text-xs font-body font-semibold text-yellow-400">{a.stock} шт.</div>
+                <div className={`text-xs font-body font-semibold ${a.stock === 0 ? "text-red-400" : "text-yellow-400"}`}>{a.stock} шт.</div>
               </div>
             ))}
-            <div className="flex items-center justify-between py-2">
-              <div>
-                <div className="text-sm font-body text-foreground">Свечи зажигания (к-т)</div>
-                <div className="text-xs text-muted-foreground font-body">SP-7892 · NGK</div>
-              </div>
-              <div className="text-xs font-body font-semibold text-red-400">0 шт.</div>
-            </div>
+            {lowStock.length === 0 && <div className="text-sm text-muted-foreground font-body py-2">Все запчасти в наличии</div>}
           </div>
         </div>
       </div>
@@ -233,6 +229,22 @@ function HomeSection({ onSearch }: { onSearch: (vin: string) => void }) {
 }
 
 function GarageSection() {
+  const { data, loading, reload } = useApi(() => api.cars.list());
+  const [showForm, setShowForm] = useState(false);
+  const [form, setForm] = useState({ vin: "", brand: "", model: "", year: new Date().getFullYear(), client_name: "", client_phone: "", color: "#888888" });
+  const [saving, setSaving] = useState(false);
+  const cars: Car[] = data?.cars ?? [];
+
+  const handleAdd = async () => {
+    if (!form.vin || !form.brand || !form.model || !form.client_name) return;
+    setSaving(true);
+    await api.cars.add(form);
+    setSaving(false);
+    setShowForm(false);
+    setForm({ vin: "", brand: "", model: "", year: new Date().getFullYear(), client_name: "", client_phone: "", color: "#888888" });
+    reload();
+  };
+
   return (
     <div className="animate-fade-in space-y-6">
       <div className="flex items-center justify-between">
@@ -240,63 +252,92 @@ function GarageSection() {
           <h2 className="font-display text-2xl font-bold text-foreground uppercase">Гараж</h2>
           <p className="text-sm text-muted-foreground font-body">Автомобили клиентов и история обслуживания</p>
         </div>
-        <button className="bg-primary text-primary-foreground px-4 py-2 rounded-xl text-sm font-body font-semibold flex items-center gap-2 hover:brightness-110 transition-all">
-          <Icon name="Plus" size={16} />
-          Добавить авто
+        <button onClick={() => setShowForm(!showForm)} className="bg-primary text-primary-foreground px-4 py-2 rounded-xl text-sm font-body font-semibold flex items-center gap-2 hover:brightness-110 transition-all">
+          <Icon name={showForm ? "X" : "Plus"} size={16} />
+          {showForm ? "Отмена" : "Добавить авто"}
         </button>
       </div>
 
-      <div className="grid gap-4">
-        {MOCK_CARS.map((car) => (
-          <div key={car.id} className="bg-card border border-border rounded-xl p-5 card-hover">
-            <div className="flex items-start justify-between gap-4">
-              <div className="flex items-center gap-4">
-                <div
-                  className="w-12 h-12 rounded-xl flex items-center justify-center"
-                  style={{ background: `${car.color}25`, border: `1px solid ${car.color}40` }}
-                >
-                  <Icon name="Car" size={22} style={{ color: car.color }} />
-                </div>
-                <div>
-                  <h3 className="font-display text-lg font-semibold text-foreground">
-                    {car.brand} {car.model}
-                  </h3>
-                  <p className="text-sm text-muted-foreground font-body">{car.client} · {car.year} г.</p>
-                </div>
-              </div>
-              <div className="text-right">
-                <div className="font-body text-xs text-muted-foreground tracking-widest">VIN</div>
-                <div className="font-body text-xs text-foreground tracking-wider">{car.vin}</div>
-              </div>
-            </div>
-            <div className="mt-4 flex flex-wrap gap-2">
-              <button className="text-xs font-body px-3 py-1.5 bg-secondary rounded-lg text-secondary-foreground hover:bg-primary/20 hover:text-primary transition-all flex items-center gap-1.5">
-                <Icon name="History" size={12} />
-                История
-              </button>
-              <button className="text-xs font-body px-3 py-1.5 bg-secondary rounded-lg text-secondary-foreground hover:bg-primary/20 hover:text-primary transition-all flex items-center gap-1.5">
-                <Icon name="ClipboardList" size={12} />
-                Новый заказ
-              </button>
-              <button className="text-xs font-body px-3 py-1.5 bg-secondary rounded-lg text-secondary-foreground hover:bg-primary/20 hover:text-primary transition-all flex items-center gap-1.5">
-                <Icon name="Search" size={12} />
-                Подобрать запчасти
-              </button>
-            </div>
+      {showForm && (
+        <div className="bg-card border border-primary/30 rounded-xl p-5 space-y-3 animate-fade-in">
+          <h3 className="font-display text-sm font-semibold text-foreground uppercase tracking-wide">Новый автомобиль</h3>
+          <div className="grid grid-cols-2 gap-3">
+            <input value={form.vin} onChange={(e) => setForm({ ...form, vin: e.target.value.toUpperCase() })} placeholder="VIN-код*" maxLength={17}
+              className="col-span-2 bg-secondary border border-border rounded-xl px-4 py-2.5 text-foreground font-body text-sm focus:outline-none focus:border-primary/60 transition-all tracking-wider" />
+            <input value={form.brand} onChange={(e) => setForm({ ...form, brand: e.target.value })} placeholder="Марка*"
+              className="bg-secondary border border-border rounded-xl px-4 py-2.5 text-foreground font-body text-sm focus:outline-none focus:border-primary/60 transition-all" />
+            <input value={form.model} onChange={(e) => setForm({ ...form, model: e.target.value })} placeholder="Модель*"
+              className="bg-secondary border border-border rounded-xl px-4 py-2.5 text-foreground font-body text-sm focus:outline-none focus:border-primary/60 transition-all" />
+            <input value={form.year} onChange={(e) => setForm({ ...form, year: Number(e.target.value) })} placeholder="Год" type="number" min={1990} max={2030}
+              className="bg-secondary border border-border rounded-xl px-4 py-2.5 text-foreground font-body text-sm focus:outline-none focus:border-primary/60 transition-all" />
+            <input value={form.client_name} onChange={(e) => setForm({ ...form, client_name: e.target.value })} placeholder="Клиент (ФИО)*"
+              className="bg-secondary border border-border rounded-xl px-4 py-2.5 text-foreground font-body text-sm focus:outline-none focus:border-primary/60 transition-all" />
+            <input value={form.client_phone} onChange={(e) => setForm({ ...form, client_phone: e.target.value })} placeholder="Телефон"
+              className="bg-secondary border border-border rounded-xl px-4 py-2.5 text-foreground font-body text-sm focus:outline-none focus:border-primary/60 transition-all" />
           </div>
-        ))}
-      </div>
+          <button onClick={handleAdd} disabled={saving}
+            className="w-full bg-primary text-primary-foreground py-3 rounded-xl font-body font-semibold text-sm hover:brightness-110 transition-all disabled:opacity-50">
+            {saving ? "Сохранение..." : "Сохранить"}
+          </button>
+        </div>
+      )}
+
+      {loading ? <Spinner /> : (
+        <div className="grid gap-4">
+          {cars.map((car) => (
+            <div key={car.id} className="bg-card border border-border rounded-xl p-5 card-hover">
+              <div className="flex items-start justify-between gap-4">
+                <div className="flex items-center gap-4">
+                  <div className="w-12 h-12 rounded-xl flex items-center justify-center" style={{ background: `${car.color}25`, border: `1px solid ${car.color}40` }}>
+                    <Icon name="Car" size={22} style={{ color: car.color }} />
+                  </div>
+                  <div>
+                    <h3 className="font-display text-lg font-semibold text-foreground">{car.brand} {car.model}</h3>
+                    <p className="text-sm text-muted-foreground font-body">{car.client_name} · {car.year} г.</p>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <div className="font-body text-xs text-muted-foreground tracking-widest">VIN</div>
+                  <div className="font-body text-xs text-foreground tracking-wider">{car.vin}</div>
+                </div>
+              </div>
+              <div className="mt-4 flex flex-wrap gap-2">
+                <button className="text-xs font-body px-3 py-1.5 bg-secondary rounded-lg text-secondary-foreground hover:bg-primary/20 hover:text-primary transition-all flex items-center gap-1.5">
+                  <Icon name="History" size={12} /> История
+                </button>
+                <button className="text-xs font-body px-3 py-1.5 bg-secondary rounded-lg text-secondary-foreground hover:bg-primary/20 hover:text-primary transition-all flex items-center gap-1.5">
+                  <Icon name="ClipboardList" size={12} /> Новый заказ
+                </button>
+              </div>
+            </div>
+          ))}
+          {cars.length === 0 && <div className="text-center py-10 text-muted-foreground font-body text-sm">Нет автомобилей. Добавьте первый!</div>}
+        </div>
+      )}
     </div>
   );
 }
 
 function ArticlesSection() {
   const [search, setSearch] = useState("");
-  const filtered = MOCK_ARTICLES.filter(
-    (a) =>
-      a.name.toLowerCase().includes(search.toLowerCase()) ||
-      a.article.toLowerCase().includes(search.toLowerCase())
-  );
+  const { data, loading, reload } = useApi(() => api.articles.list(search), [search]);
+  const articles: Article[] = data?.articles ?? [];
+
+  useEffect(() => { reload(); }, [search]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const [showForm, setShowForm] = useState(false);
+  const [form, setForm] = useState({ article: "", name: "", brand: "", price: 0, stock: 0 });
+  const [saving, setSaving] = useState(false);
+
+  const handleAdd = async () => {
+    if (!form.article || !form.name) return;
+    setSaving(true);
+    await api.articles.add(form);
+    setSaving(false);
+    setShowForm(false);
+    setForm({ article: "", name: "", brand: "", price: 0, stock: 0 });
+    reload();
+  };
 
   return (
     <div className="animate-fade-in space-y-6">
@@ -305,47 +346,87 @@ function ArticlesSection() {
           <h2 className="font-display text-2xl font-bold text-foreground uppercase">Артикулы</h2>
           <p className="text-sm text-muted-foreground font-body">Каталог запчастей и комплектующих</p>
         </div>
-        <button className="bg-primary text-primary-foreground px-4 py-2 rounded-xl text-sm font-body font-semibold flex items-center gap-2 hover:brightness-110 transition-all">
-          <Icon name="Plus" size={16} />
-          Добавить
+        <button onClick={() => setShowForm(!showForm)} className="bg-primary text-primary-foreground px-4 py-2 rounded-xl text-sm font-body font-semibold flex items-center gap-2 hover:brightness-110 transition-all">
+          <Icon name={showForm ? "X" : "Plus"} size={16} />
+          {showForm ? "Отмена" : "Добавить"}
         </button>
       </div>
 
-      <input
-        value={search}
-        onChange={(e) => setSearch(e.target.value)}
-        placeholder="Поиск по названию или артикулу..."
-        className="w-full bg-card border border-border rounded-xl px-4 py-3 text-foreground font-body text-sm focus:outline-none focus:border-primary/60 focus:ring-2 focus:ring-primary/20 transition-all"
-      />
-
-      <div className="bg-card border border-border rounded-xl overflow-hidden">
-        <div className="hidden md:grid grid-cols-[100px_1fr_80px_80px_120px] gap-0 text-xs text-muted-foreground font-body uppercase tracking-wider px-5 py-3 border-b border-border bg-secondary/30">
-          <span>Артикул</span>
-          <span>Название</span>
-          <span className="text-center">Бренд</span>
-          <span className="text-right">Цена</span>
-          <span className="text-right">Наличие</span>
-        </div>
-        {filtered.map((a, i) => (
-          <div
-            key={a.id}
-            className={`flex flex-col md:grid md:grid-cols-[100px_1fr_80px_80px_120px] gap-2 md:gap-0 items-start md:items-center px-5 py-3.5 transition-all hover:bg-secondary/40 cursor-pointer ${i < filtered.length - 1 ? "border-b border-border/50" : ""}`}
-          >
-            <span className="font-body text-xs text-muted-foreground tracking-wider">{a.article}</span>
-            <span className="font-body text-sm text-foreground">{a.name}</span>
-            <span className="font-body text-xs text-muted-foreground md:text-center">{a.brand}</span>
-            <span className="font-body text-sm font-semibold text-foreground md:text-right">₽ {a.price.toLocaleString()}</span>
-            <div className="md:text-right">
-              <StatusBadge status={a.status} />
-            </div>
+      {showForm && (
+        <div className="bg-card border border-primary/30 rounded-xl p-5 space-y-3 animate-fade-in">
+          <h3 className="font-display text-sm font-semibold text-foreground uppercase tracking-wide">Новая запчасть</h3>
+          <div className="grid grid-cols-2 gap-3">
+            <input value={form.article} onChange={(e) => setForm({ ...form, article: e.target.value })} placeholder="Артикул*"
+              className="bg-secondary border border-border rounded-xl px-4 py-2.5 text-foreground font-body text-sm focus:outline-none focus:border-primary/60 transition-all" />
+            <input value={form.brand} onChange={(e) => setForm({ ...form, brand: e.target.value })} placeholder="Бренд"
+              className="bg-secondary border border-border rounded-xl px-4 py-2.5 text-foreground font-body text-sm focus:outline-none focus:border-primary/60 transition-all" />
+            <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Название*"
+              className="col-span-2 bg-secondary border border-border rounded-xl px-4 py-2.5 text-foreground font-body text-sm focus:outline-none focus:border-primary/60 transition-all" />
+            <input value={form.price} onChange={(e) => setForm({ ...form, price: Number(e.target.value) })} placeholder="Цена, ₽" type="number" min={0}
+              className="bg-secondary border border-border rounded-xl px-4 py-2.5 text-foreground font-body text-sm focus:outline-none focus:border-primary/60 transition-all" />
+            <input value={form.stock} onChange={(e) => setForm({ ...form, stock: Number(e.target.value) })} placeholder="Остаток, шт." type="number" min={0}
+              className="bg-secondary border border-border rounded-xl px-4 py-2.5 text-foreground font-body text-sm focus:outline-none focus:border-primary/60 transition-all" />
           </div>
-        ))}
-      </div>
+          <button onClick={handleAdd} disabled={saving}
+            className="w-full bg-primary text-primary-foreground py-3 rounded-xl font-body font-semibold text-sm hover:brightness-110 transition-all disabled:opacity-50">
+            {saving ? "Сохранение..." : "Сохранить"}
+          </button>
+        </div>
+      )}
+
+      <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Поиск по названию или артикулу..."
+        className="w-full bg-card border border-border rounded-xl px-4 py-3 text-foreground font-body text-sm focus:outline-none focus:border-primary/60 focus:ring-2 focus:ring-primary/20 transition-all" />
+
+      {loading ? <Spinner /> : (
+        <div className="bg-card border border-border rounded-xl overflow-hidden">
+          <div className="hidden md:grid grid-cols-[100px_1fr_80px_80px_120px] text-xs text-muted-foreground font-body uppercase tracking-wider px-5 py-3 border-b border-border bg-secondary/30">
+            <span>Артикул</span><span>Название</span><span className="text-center">Бренд</span><span className="text-right">Цена</span><span className="text-right">Наличие</span>
+          </div>
+          {articles.map((a, i) => (
+            <div key={a.id} className={`flex flex-col md:grid md:grid-cols-[100px_1fr_80px_80px_120px] gap-2 md:gap-0 items-start md:items-center px-5 py-3.5 transition-all hover:bg-secondary/40 cursor-pointer ${i < articles.length - 1 ? "border-b border-border/50" : ""}`}>
+              <span className="font-body text-xs text-muted-foreground tracking-wider">{a.article}</span>
+              <span className="font-body text-sm text-foreground">{a.name}</span>
+              <span className="font-body text-xs text-muted-foreground md:text-center">{a.brand}</span>
+              <span className="font-body text-sm font-semibold text-foreground md:text-right">₽ {a.price.toLocaleString()}</span>
+              <div className="md:text-right"><StatusBadge status={a.status} /></div>
+            </div>
+          ))}
+          {articles.length === 0 && <div className="text-center py-10 text-muted-foreground font-body text-sm">Запчастей не найдено</div>}
+        </div>
+      )}
     </div>
   );
 }
 
 function OrdersSection() {
+  const { data, loading, reload } = useApi(() => api.orders.list());
+  const orders: Order[] = data?.orders ?? [];
+  const [showForm, setShowForm] = useState(false);
+  const [form, setForm] = useState({ client_name: "", car_label: "", amount: 0, status: "waiting", notes: "" });
+  const [saving, setSaving] = useState(false);
+
+  const counts = {
+    in_work: orders.filter((o) => o.status === "in_work").length,
+    waiting: orders.filter((o) => o.status === "waiting").length,
+    ready: orders.filter((o) => o.status === "ready").length,
+    done: orders.filter((o) => o.status === "done").length,
+  };
+
+  const handleAdd = async () => {
+    if (!form.client_name) return;
+    setSaving(true);
+    await api.orders.add(form);
+    setSaving(false);
+    setShowForm(false);
+    setForm({ client_name: "", car_label: "", amount: 0, status: "waiting", notes: "" });
+    reload();
+  };
+
+  const handleStatusChange = async (order: Order, newStatus: string) => {
+    await api.orders.update({ id: order.id, status: newStatus, amount: order.amount, notes: order.notes ?? "" });
+    reload();
+  };
+
   return (
     <div className="animate-fade-in space-y-6">
       <div className="flex items-center justify-between">
@@ -353,18 +434,45 @@ function OrdersSection() {
           <h2 className="font-display text-2xl font-bold text-foreground uppercase">Заказы</h2>
           <p className="text-sm text-muted-foreground font-body">Управление заказами клиентов</p>
         </div>
-        <button className="bg-primary text-primary-foreground px-4 py-2 rounded-xl text-sm font-body font-semibold flex items-center gap-2 hover:brightness-110 transition-all">
-          <Icon name="Plus" size={16} />
-          Новый заказ
+        <button onClick={() => setShowForm(!showForm)} className="bg-primary text-primary-foreground px-4 py-2 rounded-xl text-sm font-body font-semibold flex items-center gap-2 hover:brightness-110 transition-all">
+          <Icon name={showForm ? "X" : "Plus"} size={16} />
+          {showForm ? "Отмена" : "Новый заказ"}
         </button>
       </div>
 
+      {showForm && (
+        <div className="bg-card border border-primary/30 rounded-xl p-5 space-y-3 animate-fade-in">
+          <h3 className="font-display text-sm font-semibold text-foreground uppercase tracking-wide">Новый заказ</h3>
+          <div className="grid grid-cols-2 gap-3">
+            <input value={form.client_name} onChange={(e) => setForm({ ...form, client_name: e.target.value })} placeholder="Клиент (ФИО)*"
+              className="bg-secondary border border-border rounded-xl px-4 py-2.5 text-foreground font-body text-sm focus:outline-none focus:border-primary/60 transition-all" />
+            <input value={form.car_label} onChange={(e) => setForm({ ...form, car_label: e.target.value })} placeholder="Автомобиль"
+              className="bg-secondary border border-border rounded-xl px-4 py-2.5 text-foreground font-body text-sm focus:outline-none focus:border-primary/60 transition-all" />
+            <input value={form.amount} onChange={(e) => setForm({ ...form, amount: Number(e.target.value) })} placeholder="Сумма, ₽" type="number" min={0}
+              className="bg-secondary border border-border rounded-xl px-4 py-2.5 text-foreground font-body text-sm focus:outline-none focus:border-primary/60 transition-all" />
+            <select value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })}
+              className="bg-secondary border border-border rounded-xl px-4 py-2.5 text-foreground font-body text-sm focus:outline-none focus:border-primary/60 transition-all">
+              <option value="waiting">Ожидает</option>
+              <option value="in_work">В работе</option>
+              <option value="ready">Готов</option>
+              <option value="done">Выдан</option>
+            </select>
+            <textarea value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} placeholder="Комментарий" rows={2}
+              className="col-span-2 bg-secondary border border-border rounded-xl px-4 py-2.5 text-foreground font-body text-sm focus:outline-none focus:border-primary/60 transition-all resize-none" />
+          </div>
+          <button onClick={handleAdd} disabled={saving}
+            className="w-full bg-primary text-primary-foreground py-3 rounded-xl font-body font-semibold text-sm hover:brightness-110 transition-all disabled:opacity-50">
+            {saving ? "Сохранение..." : "Создать заказ"}
+          </button>
+        </div>
+      )}
+
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         {[
-          { label: "В работе", count: 1, color: "text-blue-400", bg: "bg-blue-500/10 border-blue-500/20" },
-          { label: "Ожидает", count: 1, color: "text-orange-400", bg: "bg-orange-500/10 border-orange-500/20" },
-          { label: "Готов", count: 1, color: "text-green-400", bg: "bg-green-500/10 border-green-500/20" },
-          { label: "Выдан", count: 1, color: "text-zinc-400", bg: "bg-zinc-500/10 border-zinc-500/20" },
+          { label: "В работе", count: counts.in_work, color: "text-blue-400", bg: "bg-blue-500/10 border-blue-500/20" },
+          { label: "Ожидает", count: counts.waiting, color: "text-orange-400", bg: "bg-orange-500/10 border-orange-500/20" },
+          { label: "Готов", count: counts.ready, color: "text-green-400", bg: "bg-green-500/10 border-green-500/20" },
+          { label: "Выдан", count: counts.done, color: "text-zinc-400", bg: "bg-zinc-500/10 border-zinc-500/20" },
         ].map((s, i) => (
           <div key={i} className={`rounded-xl border p-4 ${s.bg}`}>
             <div className={`font-display text-3xl font-bold ${s.color}`}>{s.count}</div>
@@ -373,36 +481,57 @@ function OrdersSection() {
         ))}
       </div>
 
-      <div className="space-y-3">
-        {MOCK_ORDERS.map((order) => (
-          <div key={order.id} className="bg-card border border-border rounded-xl p-5 card-hover cursor-pointer">
-            <div className="flex items-start justify-between gap-3">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-secondary rounded-xl flex items-center justify-center">
-                  <Icon name="FileText" size={18} className="text-primary" />
-                </div>
-                <div>
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="font-body font-semibold text-foreground text-sm">{order.id}</span>
-                    <StatusBadge status={order.status} />
+      {loading ? <Spinner /> : (
+        <div className="space-y-3">
+          {orders.map((order) => (
+            <div key={order.id} className="bg-card border border-border rounded-xl p-5 card-hover">
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-secondary rounded-xl flex items-center justify-center">
+                    <Icon name="FileText" size={18} className="text-primary" />
                   </div>
-                  <div className="text-xs text-muted-foreground font-body mt-0.5">{order.client} · {order.car}</div>
+                  <div>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="font-body font-semibold text-foreground text-sm">{order.order_number}</span>
+                      <StatusBadge status={order.status} />
+                    </div>
+                    <div className="text-xs text-muted-foreground font-body mt-0.5">{order.client_name} · {order.car_label}</div>
+                  </div>
                 </div>
-              </div>
-              <div className="text-right">
-                <div className="font-display text-lg font-bold text-foreground">₽ {order.amount.toLocaleString()}</div>
-                <div className="text-xs text-muted-foreground font-body">{order.date}</div>
+                <div className="text-right">
+                  <div className="font-display text-lg font-bold text-foreground">₽ {order.amount.toLocaleString()}</div>
+                  <select value={order.status} onChange={(e) => handleStatusChange(order, e.target.value)}
+                    className="mt-1 bg-secondary border border-border rounded-lg px-2 py-1 text-xs font-body text-foreground focus:outline-none focus:border-primary/60">
+                    <option value="waiting">Ожидает</option>
+                    <option value="in_work">В работе</option>
+                    <option value="ready">Готов</option>
+                    <option value="done">Выдан</option>
+                  </select>
+                </div>
               </div>
             </div>
-          </div>
-        ))}
-      </div>
+          ))}
+          {orders.length === 0 && <div className="text-center py-10 text-muted-foreground font-body text-sm">Заказов пока нет</div>}
+        </div>
+      )}
     </div>
   );
 }
 
 function CartSection() {
-  const total = MOCK_CART.reduce((sum, item) => sum + item.price * item.qty, 0);
+  const { data, loading, reload } = useApi(() => api.cart.list());
+  const items: CartItem[] = data?.items ?? [];
+  const total = data?.total ?? 0;
+
+  const handleQty = async (item: CartItem, delta: number) => {
+    const newQty = item.qty + delta;
+    if (newQty <= 0) {
+      await api.cart.remove(item.id);
+    } else {
+      await api.cart.update(item.id, newQty);
+    }
+    reload();
+  };
 
   return (
     <div className="animate-fade-in space-y-6">
@@ -411,49 +540,58 @@ function CartSection() {
         <p className="text-sm text-muted-foreground font-body">Товары для оформления заказа</p>
       </div>
 
-      <div className="space-y-3">
-        {MOCK_CART.map((item) => (
-          <div key={item.id} className="bg-card border border-border rounded-xl p-4 flex items-center gap-4">
-            <div className="w-10 h-10 bg-primary/10 border border-primary/20 rounded-xl flex items-center justify-center flex-shrink-0">
-              <Icon name="Package" size={18} className="text-primary" />
-            </div>
-            <div className="flex-1 min-w-0">
-              <div className="font-body text-sm font-medium text-foreground">{item.name}</div>
-              <div className="text-xs text-muted-foreground font-body">{item.article} · {item.brand}</div>
-            </div>
-            <div className="flex items-center gap-2">
-              <button className="w-7 h-7 bg-secondary rounded-lg text-foreground hover:bg-primary/20 hover:text-primary transition-all flex items-center justify-center">
-                <Icon name="Minus" size={12} />
-              </button>
-              <span className="w-6 text-center font-body text-sm font-semibold text-foreground">{item.qty}</span>
-              <button className="w-7 h-7 bg-secondary rounded-lg text-foreground hover:bg-primary/20 hover:text-primary transition-all flex items-center justify-center">
-                <Icon name="Plus" size={12} />
-              </button>
-            </div>
-            <div className="text-right min-w-[80px]">
-              <div className="font-body font-semibold text-foreground text-sm">₽ {(item.price * item.qty).toLocaleString()}</div>
-              <div className="text-xs text-muted-foreground font-body">× {item.price.toLocaleString()}</div>
-            </div>
-            <button className="text-muted-foreground hover:text-red-400 transition-colors ml-1">
-              <Icon name="X" size={16} />
-            </button>
+      {loading ? <Spinner /> : (
+        <>
+          <div className="space-y-3">
+            {items.filter((i) => i.qty > 0).map((item) => (
+              <div key={item.id} className="bg-card border border-border rounded-xl p-4 flex items-center gap-4">
+                <div className="w-10 h-10 bg-primary/10 border border-primary/20 rounded-xl flex items-center justify-center flex-shrink-0">
+                  <Icon name="Package" size={18} className="text-primary" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="font-body text-sm font-medium text-foreground">{item.name}</div>
+                  <div className="text-xs text-muted-foreground font-body">{item.article} · {item.brand}</div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button onClick={() => handleQty(item, -1)} className="w-7 h-7 bg-secondary rounded-lg text-foreground hover:bg-primary/20 hover:text-primary transition-all flex items-center justify-center">
+                    <Icon name="Minus" size={12} />
+                  </button>
+                  <span className="w-6 text-center font-body text-sm font-semibold text-foreground">{item.qty}</span>
+                  <button onClick={() => handleQty(item, 1)} className="w-7 h-7 bg-secondary rounded-lg text-foreground hover:bg-primary/20 hover:text-primary transition-all flex items-center justify-center">
+                    <Icon name="Plus" size={12} />
+                  </button>
+                </div>
+                <div className="text-right min-w-[80px]">
+                  <div className="font-body font-semibold text-foreground text-sm">₽ {(item.price * item.qty).toLocaleString()}</div>
+                  <div className="text-xs text-muted-foreground font-body">× {item.price.toLocaleString()}</div>
+                </div>
+                <button onClick={() => handleQty(item, -item.qty)} className="text-muted-foreground hover:text-red-400 transition-colors ml-1">
+                  <Icon name="X" size={16} />
+                </button>
+              </div>
+            ))}
+            {items.filter((i) => i.qty > 0).length === 0 && (
+              <div className="text-center py-10 text-muted-foreground font-body text-sm">Корзина пуста</div>
+            )}
           </div>
-        ))}
-      </div>
 
-      <div className="bg-card border border-border rounded-xl p-5">
-        <div className="flex items-center justify-between mb-3">
-          <span className="font-body text-muted-foreground text-sm">Итого позиций:</span>
-          <span className="font-body text-foreground text-sm">{MOCK_CART.length} шт.</span>
-        </div>
-        <div className="flex items-center justify-between mb-5 pb-4 border-b border-border">
-          <span className="font-body font-semibold text-foreground">Итого к оплате:</span>
-          <span className="font-display text-2xl font-bold text-primary">₽ {total.toLocaleString()}</span>
-        </div>
-        <button className="w-full bg-primary text-primary-foreground py-3.5 rounded-xl font-body font-semibold text-sm hover:brightness-110 transition-all active:scale-95">
-          Оформить заказ
-        </button>
-      </div>
+          {items.filter((i) => i.qty > 0).length > 0 && (
+            <div className="bg-card border border-border rounded-xl p-5">
+              <div className="flex items-center justify-between mb-3">
+                <span className="font-body text-muted-foreground text-sm">Итого позиций:</span>
+                <span className="font-body text-foreground text-sm">{items.filter((i) => i.qty > 0).length} шт.</span>
+              </div>
+              <div className="flex items-center justify-between mb-5 pb-4 border-b border-border">
+                <span className="font-body font-semibold text-foreground">Итого к оплате:</span>
+                <span className="font-display text-2xl font-bold text-primary">₽ {total.toLocaleString()}</span>
+              </div>
+              <button className="w-full bg-primary text-primary-foreground py-3.5 rounded-xl font-body font-semibold text-sm hover:brightness-110 transition-all active:scale-95">
+                Оформить заказ
+              </button>
+            </div>
+          )}
+        </>
+      )}
     </div>
   );
 }
@@ -659,6 +797,12 @@ function ContactsSection() {
 export default function Index() {
   const [active, setActive] = useState<Section>("home");
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const { data: cartData } = useApi(() => api.cart.list());
+  const cartCount = cartData?.items.filter((i) => i.qty > 0).length ?? 0;
+
+  const navItems = NAV_ITEMS.map((item) =>
+    item.id === "cart" ? { ...item, badge: cartCount || undefined } : item
+  );
 
   const renderSection = () => {
     switch (active) {
@@ -698,7 +842,7 @@ export default function Index() {
         </div>
 
         <div className="ml-auto flex items-center gap-1">
-          {NAV_ITEMS.filter((n) => n.badge).map((item) => (
+          {navItems.filter((n) => n.badge).map((item) => (
             <button
               key={item.id}
               onClick={() => setActive(item.id)}
@@ -725,7 +869,7 @@ export default function Index() {
           className={`fixed lg:sticky top-14 left-0 z-40 h-[calc(100vh-3.5rem)] w-56 bg-sidebar border-r border-sidebar-border flex flex-col transition-transform duration-300 ${sidebarOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"}`}
         >
           <nav className="flex-1 py-3 px-2 space-y-0.5 overflow-y-auto scrollbar-thin">
-            {NAV_ITEMS.map((item) => (
+            {navItems.map((item) => (
               <button
                 key={item.id}
                 onClick={() => { setActive(item.id); setSidebarOpen(false); }}
@@ -735,11 +879,11 @@ export default function Index() {
               >
                 <Icon name={item.icon as "Home"} size={18} />
                 <span className="flex-1 text-left">{item.label}</span>
-                {item.badge && (
+                {item.badge ? (
                   <span className="w-5 h-5 bg-primary text-primary-foreground text-[10px] font-bold rounded-full flex items-center justify-center leading-none">
                     {item.badge}
                   </span>
-                )}
+                ) : null}
               </button>
             ))}
           </nav>

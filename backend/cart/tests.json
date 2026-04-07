@@ -1,0 +1,12 @@
+{
+  "tests": [
+    {
+      "name": "GET cart items",
+      "method": "GET",
+      "path": "/",
+      "expectedStatus": 200,
+      "expectedBody": {"items": [], "total": 0},
+      "bodyMatcher": "string_contains"
+    }
+  ]
+}

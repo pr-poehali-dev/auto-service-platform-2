@@ -1,0 +1,10 @@
+CREATE TABLE articles (
+    id SERIAL PRIMARY KEY,
+    article VARCHAR(50) NOT NULL UNIQUE,
+    name VARCHAR(200) NOT NULL,
+    brand VARCHAR(100) NOT NULL,
+    price INTEGER NOT NULL DEFAULT 0,
+    stock INTEGER NOT NULL DEFAULT 0,
+    notes TEXT,
+    created_at TIMESTAMP DEFAULT NOW()
+)
