@@ -146,6 +146,23 @@ function HomeSection({ onSearch }: { onSearch: (vin: string) => void }) {
           </button>
         </div>
 
+        {vin.length >= 6 && !scanning && (
+          <div className="flex flex-wrap gap-2 animate-fade-in">
+            <span className="text-xs text-muted-foreground font-body self-center">Найти на:</span>
+            {[
+              { label: "Autodoc", url: `https://www.autodoc.ru/search/by-text/?search=${encodeURIComponent(vin)}`, color: "hover:text-blue-400 hover:border-blue-400/40" },
+              { label: "Stancebazztards", url: `https://stancebazztards.ru/index.php?route=product/search&search=${encodeURIComponent(vin)}`, color: "hover:text-orange-400 hover:border-orange-400/40" },
+              { label: "Technobearing", url: `https://technobearing.ru/search/?q=${encodeURIComponent(vin)}`, color: "hover:text-purple-400 hover:border-purple-400/40" },
+            ].map((s) => (
+              <a key={s.label} href={s.url} target="_blank" rel="noopener noreferrer"
+                className={`flex items-center gap-1.5 px-3 py-1.5 bg-card border border-border rounded-xl text-xs font-body text-muted-foreground transition-all ${s.color} hover:bg-secondary active:scale-95`}>
+                <Icon name="ExternalLink" size={11} />
+                {s.label}
+              </a>
+            ))}
+          </div>
+        )}
+
         {scanning && (
           <div className="relative rounded-xl overflow-hidden bg-card border border-primary/30">
             <video ref={videoRef} autoPlay playsInline className="w-full h-48 object-cover" />
@@ -347,6 +364,12 @@ function ArticlesSection() {
     setTimeout(() => setAddedIds((prev) => { const s = new Set(prev); s.delete(a.id); return s; }), 1500);
   };
 
+  const SEARCH_SITES = [
+    { key: "autodoc", label: "Autodoc", url: (q: string) => `https://www.autodoc.ru/search/by-text/?search=${encodeURIComponent(q)}`, color: "hover:text-blue-400 hover:border-blue-400/30" },
+    { key: "stance", label: "Stance", url: (q: string) => `https://stancebazztards.ru/index.php?route=product/search&search=${encodeURIComponent(q)}`, color: "hover:text-orange-400 hover:border-orange-400/30" },
+    { key: "techno", label: "Techno", url: (q: string) => `https://technobearing.ru/search/?q=${encodeURIComponent(q)}`, color: "hover:text-purple-400 hover:border-purple-400/30" },
+  ];
+
   return (
     <div className="animate-fade-in space-y-6">
       <div className="flex items-center justify-between">
@@ -382,8 +405,30 @@ function ArticlesSection() {
         </div>
       )}
 
-      <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Поиск по названию или артикулу..."
-        className="w-full bg-card border border-border rounded-xl px-4 py-3 text-foreground font-body text-sm focus:outline-none focus:border-primary/60 focus:ring-2 focus:ring-primary/20 transition-all" />
+      <div className="relative flex gap-2">
+        <div className="relative flex-1">
+          <Icon name="Search" size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+          <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Поиск по названию или артикулу..."
+            className="w-full bg-card border border-border rounded-xl pl-9 pr-4 py-3 text-foreground font-body text-sm focus:outline-none focus:border-primary/60 focus:ring-2 focus:ring-primary/20 transition-all" />
+        </div>
+        {search.trim().length >= 2 && (
+          <div className="flex gap-1.5 animate-fade-in">
+            {SEARCH_SITES.map((s) => (
+              <a
+                key={s.key}
+                href={s.url(search.trim())}
+                target="_blank"
+                rel="noopener noreferrer"
+                title={`Найти «${search}» на ${s.label}`}
+                className={`flex items-center gap-1.5 px-3 py-2 bg-card border border-border rounded-xl text-xs font-body font-medium text-muted-foreground transition-all ${s.color} hover:bg-secondary active:scale-95`}
+              >
+                <Icon name="ExternalLink" size={12} />
+                {s.label}
+              </a>
+            ))}
+          </div>
+        )}
+      </div>
 
       {loading ? <Spinner /> : (
         <div className="space-y-2">
@@ -406,20 +451,34 @@ function ArticlesSection() {
                   <div className="font-display text-base font-bold text-foreground">₽ {a.price.toLocaleString()}</div>
                   <div className="text-xs text-muted-foreground font-body">{a.stock} шт.</div>
                 </div>
-                <button
-                  onClick={() => handleAddToCart(a)}
-                  disabled={outOfStock}
-                  className={`flex-shrink-0 w-9 h-9 rounded-xl flex items-center justify-center transition-all ${
-                    isAdded
-                      ? "bg-green-500/20 border border-green-500/30 text-green-400"
-                      : outOfStock
-                      ? "bg-secondary border border-border text-muted-foreground opacity-40 cursor-not-allowed"
-                      : "bg-secondary border border-border text-muted-foreground hover:bg-primary/20 hover:border-primary/40 hover:text-primary active:scale-90"
-                  }`}
-                  title={outOfStock ? "Нет в наличии" : "В корзину"}
-                >
-                  <Icon name={isAdded ? "Check" : "ShoppingCart"} size={15} />
-                </button>
+                <div className="flex items-center gap-1.5 flex-shrink-0">
+                  {SEARCH_SITES.map((s) => (
+                    <a
+                      key={s.key}
+                      href={s.url(a.article)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      title={`Найти ${a.article} на ${s.label}`}
+                      className={`w-7 h-7 rounded-lg bg-secondary border border-border flex items-center justify-center text-muted-foreground transition-all ${s.color} hover:bg-secondary active:scale-90`}
+                    >
+                      <Icon name="ExternalLink" size={11} />
+                    </a>
+                  ))}
+                  <button
+                    onClick={() => handleAddToCart(a)}
+                    disabled={outOfStock}
+                    className={`w-9 h-9 rounded-xl flex items-center justify-center transition-all ${
+                      isAdded
+                        ? "bg-green-500/20 border border-green-500/30 text-green-400"
+                        : outOfStock
+                        ? "bg-secondary border border-border text-muted-foreground opacity-40 cursor-not-allowed"
+                        : "bg-secondary border border-border text-muted-foreground hover:bg-primary/20 hover:border-primary/40 hover:text-primary active:scale-90"
+                    }`}
+                    title={outOfStock ? "Нет в наличии" : "В корзину"}
+                  >
+                    <Icon name={isAdded ? "Check" : "ShoppingCart"} size={15} />
+                  </button>
+                </div>
               </div>
             );
           })}
