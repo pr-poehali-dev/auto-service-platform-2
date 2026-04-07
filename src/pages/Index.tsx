@@ -569,6 +569,10 @@ function ArticlesSection() {
   const [showCompare, setShowCompare] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editBrands, setEditBrands] = useState<Set<string>>(new Set());
+  const [editPriceId, setEditPriceId] = useState<number | null>(null);
+  const [editPrice, setEditPrice] = useState(0);
+  const [editStock, setEditStock] = useState(0);
+  const [savingPrice, setSavingPrice] = useState(false);
 
   const handleAdd = async () => {
     if (!form.article || !form.name) return;
@@ -584,6 +588,21 @@ function ArticlesSection() {
   const handleSaveBrands = async (a: Article) => {
     await api.articles.update({ id: a.id, car_brands: Array.from(editBrands).join(",") || "universal" });
     setEditingId(null);
+    reload();
+  };
+
+  const openPriceEdit = (a: Article) => {
+    setEditPriceId(a.id);
+    setEditPrice(a.price);
+    setEditStock(a.stock);
+    setEditingId(null);
+  };
+
+  const handleSavePrice = async (a: Article) => {
+    setSavingPrice(true);
+    await api.articles.update({ id: a.id, price: editPrice, stock: editStock, name: a.name, brand: a.brand });
+    setSavingPrice(false);
+    setEditPriceId(null);
     reload();
   };
 
@@ -829,34 +848,85 @@ function ArticlesSection() {
                       </div>
                     </div>
 
-                    <div className="text-right flex-shrink-0 min-w-[72px]">
-                      <div className="font-display text-sm font-bold text-foreground">₽ {a.price.toLocaleString()}</div>
-                      <div className="text-xs text-muted-foreground font-body">{a.stock} шт.</div>
-                    </div>
+                    {/* Цена и остаток — кликабельные */}
+                    {editPriceId === a.id ? (
+                      <div className="flex flex-col gap-1.5 flex-shrink-0">
+                        <div className="flex items-center gap-1">
+                          <span className="text-xs text-muted-foreground font-body">₽</span>
+                          <input
+                            type="number"
+                            value={editPrice}
+                            onChange={(e) => setEditPrice(Number(e.target.value))}
+                            onKeyDown={(e) => { if (e.key === "Enter") handleSavePrice(a); if (e.key === "Escape") setEditPriceId(null); }}
+                            className="w-20 bg-secondary border border-primary/50 rounded-lg px-2 py-1 text-sm font-display font-bold text-foreground focus:outline-none focus:border-primary text-right"
+                            autoFocus
+                          />
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <input
+                            type="number"
+                            value={editStock}
+                            min={0}
+                            onChange={(e) => setEditStock(Number(e.target.value))}
+                            onKeyDown={(e) => { if (e.key === "Enter") handleSavePrice(a); if (e.key === "Escape") setEditPriceId(null); }}
+                            className="w-20 bg-secondary border border-border rounded-lg px-2 py-1 text-xs font-body text-foreground focus:outline-none focus:border-primary/60 text-right"
+                          />
+                          <span className="text-xs text-muted-foreground font-body">шт.</span>
+                        </div>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => openPriceEdit(a)}
+                        className="text-right flex-shrink-0 min-w-[72px] group/price rounded-xl p-1.5 hover:bg-secondary transition-all"
+                        title="Редактировать цену и остаток"
+                      >
+                        <div className="font-display text-sm font-bold text-foreground group-hover/price:text-primary transition-colors">
+                          ₽ {a.price.toLocaleString()}
+                        </div>
+                        <div className="text-xs text-muted-foreground font-body flex items-center justify-end gap-1">
+                          {a.stock} шт.
+                          <Icon name="Pencil" size={9} className="opacity-0 group-hover/price:opacity-60 transition-opacity" />
+                        </div>
+                      </button>
+                    )}
 
-                    {/* Кнопка редактировать марки */}
-                    <button
-                      onClick={() => {
-                        if (isEditing) { setEditingId(null); return; }
-                        setEditingId(a.id);
-                        setEditBrands(new Set(brands));
-                      }}
-                      className={`flex-shrink-0 w-8 h-8 rounded-xl flex items-center justify-center transition-all ${
-                        isEditing ? "bg-primary/20 border border-primary/40 text-primary" : "bg-secondary border border-border text-muted-foreground hover:border-primary/30 hover:text-primary"
-                      }`}
-                      title="Привязать к маркам авто"
-                    >
-                      <Icon name="Tags" size={13} />
-                    </button>
-
-                    <button onClick={() => handleAddToCart(a)} disabled={outOfStock}
-                      className={`flex-shrink-0 w-8 h-8 rounded-xl flex items-center justify-center transition-all ${
-                        isAdded ? "bg-green-500/20 border border-green-500/30 text-green-400"
-                        : outOfStock ? "bg-secondary border border-border text-muted-foreground opacity-30 cursor-not-allowed"
-                        : "bg-secondary border border-border text-muted-foreground hover:bg-primary/20 hover:border-primary/40 hover:text-primary active:scale-90"
-                      }`} title={outOfStock ? "Нет в наличии" : "В корзину"}>
-                      <Icon name={isAdded ? "Check" : "ShoppingCart"} size={14} />
-                    </button>
+                    {/* Сохранить / кнопка марок / корзина */}
+                    {editPriceId === a.id ? (
+                      <div className="flex flex-col gap-1 flex-shrink-0">
+                        <button onClick={() => handleSavePrice(a)} disabled={savingPrice}
+                          className="w-8 h-8 bg-green-500/20 border border-green-500/30 text-green-400 rounded-xl flex items-center justify-center hover:bg-green-500/30 transition-all disabled:opacity-50">
+                          {savingPrice ? <div className="w-3 h-3 border border-green-400 border-t-transparent rounded-full animate-spin" /> : <Icon name="Check" size={13} />}
+                        </button>
+                        <button onClick={() => setEditPriceId(null)}
+                          className="w-8 h-8 bg-secondary border border-border text-muted-foreground rounded-xl flex items-center justify-center hover:text-foreground transition-all">
+                          <Icon name="X" size={13} />
+                        </button>
+                      </div>
+                    ) : (
+                      <>
+                        <button
+                          onClick={() => {
+                            if (isEditing) { setEditingId(null); return; }
+                            setEditingId(a.id);
+                            setEditBrands(new Set(brands));
+                          }}
+                          className={`flex-shrink-0 w-8 h-8 rounded-xl flex items-center justify-center transition-all ${
+                            isEditing ? "bg-primary/20 border border-primary/40 text-primary" : "bg-secondary border border-border text-muted-foreground hover:border-primary/30 hover:text-primary"
+                          }`}
+                          title="Привязать к маркам авто"
+                        >
+                          <Icon name="Tags" size={13} />
+                        </button>
+                        <button onClick={() => handleAddToCart(a)} disabled={outOfStock}
+                          className={`flex-shrink-0 w-8 h-8 rounded-xl flex items-center justify-center transition-all ${
+                            isAdded ? "bg-green-500/20 border border-green-500/30 text-green-400"
+                            : outOfStock ? "bg-secondary border border-border text-muted-foreground opacity-30 cursor-not-allowed"
+                            : "bg-secondary border border-border text-muted-foreground hover:bg-primary/20 hover:border-primary/40 hover:text-primary active:scale-90"
+                          }`} title={outOfStock ? "Нет в наличии" : "В корзину"}>
+                          <Icon name={isAdded ? "Check" : "ShoppingCart"} size={14} />
+                        </button>
+                      </>
+                    )}
                   </div>
 
                   {/* Панель редактирования марок */}
